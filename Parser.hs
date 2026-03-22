@@ -4,7 +4,7 @@ import Text.ParserCombinators.Parsec
 import Text.Parsec.Token
 import Text.Parsec.Language (emptyDef)
 import Data.Char (isSpace)
-import AST
+import ASL
 
 -----------------------
 -- Función para facilitar el testing del parser.
@@ -23,68 +23,70 @@ lis = makeTokenParser
     { commentStart    = "/*"
     , commentEnd      = "*/"
     , commentLine     = "//"
-    , opLetter        = char '='
-    , reservedNames   = [ "B", "Bin","Binomial",
-                          "Po", "Poisson",
-                          "G", "Geo", "Geometrica",
-                          "Pa", "Pasc", "Pascal",
-                          "H", "Hiper", "Hipergeometrica",
-                          "N", "Normal"]
-    , reservedOpNames = ["=", "(", ")", ",", "->", "<-", "~", "<=", "<", ">=", ">"]
+    , reservedNames   = [ "B", "Binomial",
+                          "Poi", "Poisson",
+                          "Geo",  "Geometrica",
+                          "BN", "Pascal",
+                          "Hiper", "Hipergeometrica",
+                          "N", "Normal",
+                          "Exp", "Exponencial",
+                          "Unif", "Uniforme", 
+                          "E", "SD", "V", "fdp",
+                          "moda", "max", "min", "anti-moda"
+                          ]
+    , reservedOpNames = ["=", "(", ")", ",", "->", "<-", "~", "<=", "<", ">=", ">", ":="]
     , whiteSpace      = spaceNoNL
     }
   )
 
 
 -----------------------------------
---- Parser de expresiones enteras
+--- Parser de expresiones numericas
 -----------------------------------
+parseTermSymbol :: Parser (Exp NumV -> Exp NumV -> Exp NumV)
+parseTermSymbol = 
+  do { reservedOp lis "+"; return Plus}
+  <|> do { reservedOp lis "-"; return Minus} 
 
-parseTermSymbol :: Parser (Exp Num -> Exp Num -> Exp Num)
-parseTermSymbol = do reservedOp lis "+"
-                     return Plus
-                  <|> reservedOp lis "-"
-                      return Minus 
 
-parseFactSymbol :: Parser (Exp Num -> Exp Num -> Exp Num)
-parseFactSymbol = do reservedOp lis "*"
-                     return Times
-                  <|> reservedOp lis "/"
-                      return Div 
 
+parseFactSymbol :: Parser (Exp NumV -> Exp NumV -> Exp NumV)
+parseFactSymbol = 
+  do { reservedOp lis "*"; return Times }
+  <|> do { reservedOp lis "/"; return Div } 
 
 -- parseVar se construye un parser
 -- con la clasificacion de palabras clave
-parseVar :: Parser (Exp Num)
-parseVar =
+parseVar :: Parser (Exp NumV)
+parseVar = 
   do v <- identifier lis
      return (Var v)
 
+
 -- Parser de números enteros negativos
-parseUMinus :: Parser (Exp Num)
-parseUMinus = do reservedOp lis "-"
-                  e <- parseNat
-                    <|> parseVar
-                    <|> parens lis intexp
-                  return (UMinus e)
-
-
+parseUMinus :: Parser (Exp NumV)
+parseUMinus = 
+  do reservedOp lis "-"
+     e <- (try parseNat) <|> intexp
+     return (UMinus e)
 
 -- Parser de números naturales
-parseNat :: Parser (Exp Num)
-parseNat = do n <- (natural lis)
-              return (Const (fromIntegral n))
+parseNat :: Parser (Exp NumV)
+parseNat = 
+  do n <- (natural lis)
+     return (Const (fromIntegral n))
 
-atom :: Parser (Exp Num)
-atom = parseUMinus   
-       <|> parseNat       
+atom :: Parser (Exp NumV)
+atom = try parseVarInc
+       <|> try parseVar
+       <|> try parseNat
        <|> parens lis intexp
 
 
-parseTerm :: Parser (Exp Num)
+parseTerm :: Parser (Exp Int)
 parseTerm = chainl1 atom parseFactSymbol
 
-intexp :: Parser (Exp Num)
+intexp :: Parser (Exp Int)
 intexp = chainl1 parseTerm parseTermSymbol
 
 
@@ -326,7 +328,7 @@ parseVector = do parens lis
 
 parseAcces :: Parser (Exp Num)
 parseAcces = do l <- parseVector
-                symbol lis "["
+                symbol lis brackets
                 e <- intexp
                 symbol lis "]"
                 return (Acces l e)
