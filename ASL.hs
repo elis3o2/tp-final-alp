@@ -68,5 +68,5 @@ data ExpAle
 
 data Decl a = Decl {
   declName :: Name,
-  declBody :: a,
+  declBody :: a
 }
