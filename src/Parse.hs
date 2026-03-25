@@ -1,7 +1,7 @@
 module Parse where
 
 import AST
-
+import Common
 
 import Prelude hiding ( const )
 import Text.Parsec hiding (runP,parse)
@@ -29,7 +29,7 @@ langDef = emptyDef
   , commentEnd     = "*/"
   , commentLine    = "//"
   , reservedNames  =
-      [ "B", "Binomial"
+      [ "Bin", "Binomial"
       , "Poi", "Poisson"
       , "Geo", "Geometrica"
       , "BN", "Pascal"
@@ -236,7 +236,7 @@ parseVarDisc = try parseBin
 
 parseBin :: P ExpAle
 parseBin = do
-  try (reserved "B") <|> reserved "Binomial"
+  try (reserved "Bin") <|> reserved "Binomial"
   parens $ do
     n <- parseNumExp
     reservedOp ","
@@ -363,6 +363,7 @@ parseModa = do reserved "moda"
                v <- parens parseAleExp
                return (Moda v)
 
+
 ----------------------
 -- Comandos
 ----------------------
@@ -410,6 +411,17 @@ parsePrintAle = do reserved "print"
 parseComm :: P Comm
 parseComm =   try parseDecNum <|> try parseDecAle <|> try parseDecVec
           <|> try parsePrintNum <|> try parsePrintAle <|> try parsePrintVec
+
+
+-- | Parser de programas (listas de declaraciones) 
+program :: P [Comm]
+program =  many parseComm
+
+-- Corre un parser, chequeando que se pueda consumir toda la entrada
+runP :: P a -> String -> String -> Either ParseError a
+runP p s filename = runParser (whiteSpace *> p <* eof) () filename s
+
+
 
 parseProgram :: P [Comm]
 parseProgram = whiteSpace *> many parseComm <* eof

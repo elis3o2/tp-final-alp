@@ -7,9 +7,8 @@ fact n | n < 0 = error "No definido para negativos"
 
 
 factDiv :: Integer -> Integer -> Integer
-factDiv n m | n < m  = error "No definido" 
-            | otherwise = product [m .. n]
-    
+factDiv n m | n < m  = error "No definido"
+            | otherwise = product [m + 1 .. n]    
 
 
 infixl 7 |*|

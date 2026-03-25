@@ -28,6 +28,9 @@ data EError
   | ProbInvalidForm
   | InvalidProb
   | InvalidIndex
+  | InvalidVarType
+  | VarNotScoope
+
   deriving (Eq)
 
 instance Show EError where
@@ -40,6 +43,8 @@ instance Show EError where
   show AleInvalidForm   = "Random Variable form not valid"
   show InvalidProb      = "Probability not valid"
   show InvalidIndex     = "Index not valid"
+  show InvalidVarType   = "Variable type not adimited"
+  show VarNotScoope     = "Variable not in scoope"
 
 
 

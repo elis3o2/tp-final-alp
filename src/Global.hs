@@ -3,15 +3,12 @@ import AST
 import qualified Data.Map as M
 
 
-type EnvAle = M.Map Name VarAle
-type EnvVec = M.Map Name (Vec NumC)
-type EnvNum = M.Map Name NumC
 
-data Env = Env {ale :: EnvAle, vec :: EnvVec, num :: EnvNum}
+type Env = M.Map Name Value
 
 -- | Valor del estado inicial
 initialEnv :: Env
-initialEnv = Env M.empty M.empty M.empty
+initialEnv = M.empty
 
 
 data Conf = Conf {

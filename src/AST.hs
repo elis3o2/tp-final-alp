@@ -1,16 +1,8 @@
 module AST where
+import Common
 
-import qualified Data.Vector as V
 
 type Name = String
-
-
--- Operadores
-data OpComp  = Lt | Gt | Lte | Gte | Eq | NEq deriving (Show, Eq)
-
-data OpBin = Plus | Minus | Times | Div deriving (Show, Eq)
-
-type Vec a = V.Vector a
 
 -- valores
 data VarDisc =
@@ -57,10 +49,6 @@ data ExpAle = VarA  Name
 
 
 
-
-data NumC = I Int | D Double deriving (Show, Eq)
-
-
 data ExpNum
   = ConstN NumC 
   | VarN Name
@@ -98,19 +86,19 @@ data Exp =
     ENum ExpNum
   | EVec ExpVec
   | EAle ExpAle
+  deriving (Show, Eq)
 
-
-data Value
-  = VNum NumC
+data Value =
+    VNum NumC
   | VVec (Vec NumC)
-  | VAle VarAle
+  | VAle VarAle 
 
 
-data Decl a = Decl {
-  declName :: Name,
-  declBody :: a
-} 
 
-data Type = TNum | TVec | TAle
+instance Show Value where
+  show (VNum n) = show n
+  show (VVec e) = show e
+  show (VAle x) = show x  
+
 
 data Comm = Print Exp | Let Name Exp

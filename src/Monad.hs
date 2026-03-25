@@ -1,8 +1,11 @@
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ConstraintKinds #-}
+
 module Monad where
 
 import AST
+import Common
 import Global
 import Error
 import Control.Monad.Reader
@@ -12,71 +15,63 @@ import Control.Monad.Writer
 import Control.Monad.IO.Class
 import Control.Monad (when)
 import qualified Data.Map as M
-
 type Trace = String
 
-type MonadProb m =
-  ( MonadIO m
-  , MonadReader Conf m
-  , MonadState Env m
-  , MonadError Error m
-  , MonadWriter [Trace] m
-  )
+class ( MonadIO m
+      , MonadState Env m
+      , MonadError Error m
+      , MonadReader Conf m
+      , MonadWriter [Trace] m
+      ) => MonadProb m where
+
+type ProbM = ReaderT Conf (StateT Env (ExceptT Error (WriterT [Trace] IO)))
+
+instance MonadProb ProbM
+
 
 traceMsg :: MonadProb m => String -> m ()
 traceMsg msg = do
   verbose <- asks verbose
   when verbose (tell [msg])
 
-addDeclAle :: MonadProb m => Name -> VarAle -> m ()
-addDeclAle x a = do
-  traceMsg ("[SET ALE] " ++ x)
-  modify (\s -> s { ale = M.insert x a (ale s) })
-
-addDeclVec :: MonadProb m => Name -> Vec NumC -> m ()
-addDeclVec x v = do
-  traceMsg ("[SET VEC] " ++ x)
-  modify (\s -> s { vec = M.insert x v (vec s) })
+addDecl :: MonadProb m => Name -> Value -> m ()
+addDecl x a = do
+  traceMsg ("[SET ] " ++ x)
+  modify (\s -> M.insert x a s )
 
 
-addDeclNum :: MonadProb m => Name -> NumC -> m ()
-addDeclNum x n = do
-  traceMsg ("[SET NUM] " ++ x)
-  modify (\s -> s { num = M.insert x n (num s) })
-
-
-removeAle :: MonadProb m => Name -> m ()
-removeAle x = do
-  traceMsg ("Removing ale declaration: " ++ x)
-  modify (\s -> s { ale = M.delete x (ale s) })
-
-
-removeVec :: MonadProb m => Name -> m ()
-removeVec x = do
-  traceMsg ("Removing vec declaration: " ++ x)
-  modify (\s -> s { vec = M.delete x (vec s) })
-
-
-removeNum :: MonadProb m => Name -> m ()
-removeNum x = do
-  traceMsg ("Removing num declaration: " ++ x)
-  modify (\s -> s { num = M.delete x (num s) })
+throwErrorE :: MonadProb m => EError -> m a
+throwErrorE e = throwError (ExecErr e)
 
 
 
+lookupAle :: MonadProb m => Name -> m VarAle
+lookupAle nm = do mv <- gets (M.lookup nm)
+                  case mv of
+                    Just (VAle x) ->  return x
+                    Just _        -> throwErrorE InvalidVarType
+                    Nothing       -> throwErrorE VarNotScoope
+
+lookupVec :: MonadProb m => Name -> m (Vec NumC)
+lookupVec nm = do mv <- gets (M.lookup nm)
+                  case mv of
+                    Just (VVec x) ->  return x
+                    Just _        -> throwErrorE InvalidVarType
+                    Nothing       -> throwErrorE VarNotScoope
 
 
-lookupAle :: MonadProb m => Name -> m (Maybe VarAle)
-lookupAle nm = gets (lookup nm . ale)
-
-lookupVec :: MonadProb m => Name -> m (Maybe (Vec NumC))
-lookupVec nm = gets (lookup nm . vec)
-
-lookupNum :: MonadProb m => Name -> m (Maybe NumC)
-lookupNum nm = gets (lookup nm . num)
+lookupNum :: MonadProb m => Name -> m NumC
+lookupNum nm = do mv <- gets (M.lookup nm)
+                  case mv of
+                    Just (VNum x) ->  return x
+                    Just _        -> throwErrorE InvalidVarType
+                    Nothing       -> throwErrorE VarNotScoope
 
 
-runProbM :: MonadProb m => m a -> Conf -> Env -> IO (Either Error (a, Env), [Trace])
-runProbM m conf env = runWriterT $ runExceptT $ runStateT (runReaderT m conf) env
+runProbM :: ProbM a -> Conf -> Env -> IO (Either Error (a, Env), [Trace])
+runProbM c conf env =
+  runWriterT $ runExceptT $ runStateT (runReaderT c conf) env
 
 
+printP :: (MonadProb m, Show a) => a -> m ()
+printP x = liftIO (print x)
