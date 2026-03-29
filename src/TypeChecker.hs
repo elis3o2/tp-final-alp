@@ -24,28 +24,22 @@ checkComm (Plot x) = checkAleExp x
 -- Checker de expresiones principal
 -----------------------------------
 checkType :: MonadProb m => Exp -> m ()
-checkType (VarRef _)        = return ()
-checkType x@(ConstN  {}) = checkNumExp x
-checkType x@(UMinus  {}) = checkNumExp x
-checkType x@(OpNum   {}) = checkNumExp x
-checkType x@(Access  {}) = checkNumExp x
-checkType x@(Mean     {}) = checkNumExp x
-checkType x@(Variance    {}) = checkNumExp x
-checkType x@(StdDev    {}) = checkNumExp x
-checkType x@(FDP     {}) = checkNumExp x
-checkType x@(MaxP    {}) = checkNumExp x
-checkType x@(MaxFDP  {}) = checkNumExp x
-checkType x@(Prob     {}) = checkNumExp x
-checkType x@(ProbBetween   {}) = checkProb   x
-checkType x@(Mode    {}) = checkVecExp x
-checkType x@(ConstV  {}) = checkVecExp x
-checkType x@(Rand     {}) = checkAleExp x
-checkType x@(Node    {}) = checkMkExp  x 
-checkType x@(MkE   {}) = checkMkExp  x
+checkType (VarRef _) = return ()
+checkType (NumE   x) = checkNumExp    x
+checkType (VecE   x) = checkVecExp    x
+checkType (RandE  x) = checkRand      x
+checkType (StatE  x) = checkStatExp   x
+checkType (ProbE  x) = checkProbExp   x
+checkType (Markov x) = checkMarkovExp x 
+checkType (NodeE  x) = checkNodeExp   x 
+checkType (ChainE x) = return ()
+
 --------------------------------------------------------------- +
 -- Checker de probabilidades                                    |
 --------------------------------------------------------------- |
-checkProb :: MonadProb m => Exp -> m ()                      -- |
+checkProb :: MonadProb m => ProbExp -> m ()    
+checkProb (Prob x _ n) = do checkRand x
+                            checkNumExp  n                  -- |
 checkProb (ProbBetween _ Eq _ _  _) = throwErrorE ProbInvalidForm  -- |
 checkProb (ProbBetween _ NEq _ _ _) = throwErrorE ProbInvalidForm  -- |   
 checkProb (ProbBetween _ _ _ Eq  _) = throwErrorE ProbInvalidForm  -- |
@@ -55,53 +49,75 @@ checkProb (ProbBetween _ Lte _ _ _) = throwErrorE ProbInvalidForm  -- |
 checkProb (ProbBetween _ _ _ Gt  _) = throwErrorE ProbInvalidForm  -- |
 checkProb (ProbBetween _ _ _ Gte _) = throwErrorE ProbInvalidForm  -- |
 checkProb (ProbBetween  x _ n _  m) = do checkAleExp x
-                                   checkNumExp n
-                                   checkNumExp m
-checkProb _ = throwErrorE InvalidVarType
+                                         checkNumExp n
+                                         checkNumExp m
+
+
+
+checkNum :: MonadProb m => NumExp -> m ()
+checkNum (ConstN _) = return ()
+checkNum (UMinus x) = checkNu   mExp x
+checkNum (OpNum _ x y) = do checkNumExp x 
+                            checkNumExp y
+
+
+checkVec ::  MonadProb m => VecExp -> m ()
+checkVec (ConstV v) = V.mapM_ checkNumExp v
+checkVec _ = throwErrnorE invalid 
+
+
+checkVecNum :: MonadProb m => VecExp -> m ()
+checkVecNum (Access v n) = do checkVecExp v
+                              checkNumExp n 
 
 ---------------------------------------
 -- Checker de expresiones numericas
 ----------------------------------------
 checkNumExp :: MonadProb m => Exp -> m ()
-checkNumExp (VarRef _)    = return ()
-checkNumExp (ConstN _) = return ()
-checkNumExp (UMinus x) = checkNumExp x
-checkNumExp (OpNum  _ x y) = do checkNumExp x
-                                checkNumExp y
-checkNumExp (Access v n) = do checkVecExp v
-                              checkNumExp n
-checkNumExp (Mean      x) = checkAleExp x
-checkNumExp (Variance     x) = checkAleExp x
-checkNumExp (StdDev     x) = checkAleExp x
-checkNumExp (FDP    x n) = do checkContExp x
-                              checkNumExp n
-checkNumExp (MaxP     x) = checkDiscExp x
-checkNumExp (MaxFDP   x) = checkContExp x
-checkNumExp (Prob  x _ n) = do checkAleExp x
-                              checkNumExp n
-checkNumExp x@(ProbBetween {}) = checkProb x
-checkNumExp _            = throwErrorE InvalidVarType
+checkNumExp (VarRef  _) = return ()
+checkNumExp (NumE    x) = checkNum x
+checkNumExp (VecE    x) = checkVecNum x
+checkNumExp (StatE   x) = checkStatNumExp x
+checkNumExp (ProbE   x) = checkProbExp x
+checkNumExp (MarkovE x) = checkMkNumExp x
+checkNumExp (ProbE   x) = do checkProb x
+checkNumExp _           = throwErrorE InvalidVarType
 
 
+
+
+checkStatNumExp :: MonadProb m => StatExp -> m ()
+checkStatNumExp (Mean     x) = checkRand x
+checkStatNumExp (Variance x) = checkRand x
+checkStatNumExp (StdDev   x) = checkRand x
+checkStatNumExp (FDP x    n) = do checkContExp x
+                                  checkNumExp n      
+checkStatNumExp (MaxP     x) = checkDiscExp x
+checkStatNumExp (MaxFDP   x) = checkContExp x
+checkStatNumExp _ = trhowErorrE Int
+
+
+checkStatVecExp :: MonadProb m => StatExp -> m ()
+checkStatVecExp (Mode x) = checkRand x
+checkStatNumExp _ = trhowErorrE Int
 
 ---------------------------------------
 --Checker de expresiones vectoriales
 ---------------------------------------
 checkVecExp :: MonadProb m => Exp -> m ()
-checkVecExp (VarRef    _) = return ()
-checkVecExp (Mode   x) = checkAleExp x
+checkVecExp (VarRef _) = return ()
+checkVecExp (Mode   x) = checkRand x
 checkVecExp (ConstV v) = V.mapM_ checkNumExp v
 checkVecExp _          = throwErrorE InvalidVarType
-
 
 ----------------------------------------------
 -- Checker de expresiones aleatorias
 ---------------------------------------------
-checkAleExp :: MonadProb m => Exp -> m ()
-checkAleExp (VarRef _)         = return ()
-checkAleExp (Rand (DiscE x)) = checkDiscExp' x
-checkAleExp (Rand (ContE x)) = checkContExp' x
-checkAleExp _       = throwErrorE InvalidVarType
+checkRand :: MonadProb m => Exp -> m ()
+checkRand (VarRef _)         = return ()
+checkRand (Rand (DiscE x)) = checkDiscExp' x
+checkRand (Rand (ContE x)) = checkContExp' x
+checkRand _       = throwErrorE InvalidVarType
 
 
 checkDiscExp :: MonadProb m => Exp -> m ()
@@ -111,12 +127,9 @@ checkDiscExp _ = throwErrorE DiscVarExpected
 
 
 checkContExp :: MonadProb m => Exp -> m ()
-checkContExp (VarRef _) = return ()
+checkContExp (VarRef _)       = return ()
 checkContExp (Rand (ContE x)) = checkContExp' x
 checkContExp _ = throwErrorE ContVarExpected
-
-
-
 
 
 checkDiscExp' :: MonadProb m => ExpDisc -> m ()
@@ -142,13 +155,35 @@ checkContExp' (ExpoE a) = checkNumExp a
 
 
 
-
-checkMkExp :: MonadProb m => Exp -> m ()
-checkMkExp (Node []) = throwErrorE AleInvalidForm
-checkMkExp (Node xs) = do checkng xs
-                            where
-                                checkng [] = return ()
-                                checkng ((_,y):ys) = do checkNumExp y
-                                                        checkng ys
-checkMkExp (MkE _) = return ()
+checkMarkov :: MonadProb m => MarkovExp -> m ()
+checkMarkov (VarRef      _) = return ()
+checkMarkov (MkMarkov    c) = return ()
+checkMarkov (Stationary  c) = checkMarkovExp c
+checkMarkov (NextDist  c n) = do checkMarkovExp c
+                                    return ()
 checkMkExp _ = throwErrorE InvalidProb
+
+
+checkMkNumExp :: MonadProb m => MarkovExp -> m ()
+checkMkNumExp (StepProb x _ _ n) = do checkMarkovExp x
+                                      checkNumExp n
+checkMkNumExp (PathProb x c) = do checkMarkovExp x
+                                  checkChainExp c
+checkMkNumExp (HitProb x _ _) = checkMarkovExp x
+
+
+checkMKChainExp :: MonadProb m => MarkovExp -> m ()
+checkMKChainExp (SimulFromName x _ n) = do checkMkExp x
+                                           checkNumExp n
+checkMKChainExp (SimulFromVec x v n) = do checkMarkovExp x
+                                          checkVecExp v
+                                          checkNumExp n 
+
+checkChainExp :: MonadProb m => Exp -> m ()
+checkChainExp (ConstCh _) = return ()
+checkChainExp (SimulFromName x _ n) = do checkMarkovExp x
+                                         checkNumExp n
+checkChainExp (SimulFromVec x v n) = do checkMarkovExp x
+                                        checkVecExp v
+                                        checkNumExp n
+    

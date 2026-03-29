@@ -174,7 +174,7 @@ evalExpVec _         = throwErrorE TypeCheckError
 -- Evaluador de Variables Aleatorias
 -------------------------------------
 
-evalExpAle :: MonadProb m => Exp -> m RandVar
+evalExpAle :: MonadProb m => ExpRand -> m RandVar
 evalExpAle (VarRef x)         = getAle x 
 evalExpAle (Rand (DiscE x)) = Disc <$> evalExpDisc x
 evalExpAle (Rand (ContE x)) = Cont <$> evalExpCont x
