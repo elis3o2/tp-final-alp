@@ -1,120 +1,154 @@
 module TypeChecker where
-
-import AST
 import Monad
-import Error
+import AST
 import Common
 import qualified Data.Vector as V
-import Control.Monad (when)
-import Control.Monad.Except
-
--------------------------
---- Checker de NumC
--------------------------
-
-isInt :: Double -> Bool
-isInt x = x == fromIntegral (round x :: Int)
-      && x >= fromIntegral (minBound :: Int)
-      && x <= fromIntegral (maxBound :: Int)
+import qualified Data.Map as M
+import Error
+import Global
 
 
-toInt :: MonadProb m => NumC -> m Int
-toInt (I n) = return n
-toInt (D n) | isInt n   = return (round n)
-            | otherwise = throwErrorE IntValueExpected
-
-toDouble :: MonadProb m => NumC -> m Double
-toDouble (I n) = return (fromIntegral n)
-toDouble (D n) = return n
 
 
-tryToInt :: NumC -> NumC
-tryToInt (D n) | isInt n   = I (round n)
-               | otherwise = D n
-tryToInt x = x
+checkComm :: MonadProb m => Comm -> m ()
+checkComm (Print x) = checkType x
+checkComm (Let _ x) = checkType x
 
---------------------------------
--- Checker de probabilidades
---------------------------------
---- Un operador 
-
-checkProbDisc :: MonadProb m  => VarDisc -> OpComp -> Int -> m ()
-checkProbDisc (Bin n _) _     k = when (k < 0 || k > n) (throwErrorE ProbInvalidForm)
-checkProbDisc (Poiss _) _     k = when (k < 0) (throwErrorE ProbInvalidForm)
-checkProbDisc (Geo _) _       k = when (k < 1) (throwErrorE ProbInvalidForm)
-checkProbDisc (Pasc r _) _    k = when (k < r) (throwErrorE ProbInvalidForm)
-checkProbDisc (Hiper m _ _) _ k = when (k < 0 || k > m) (throwErrorE ProbInvalidForm)
-checkProbDisc (Custom xs _) _ k = when (V.all (/= k) xs) (throwErrorE ProbInvalidForm)
-
--- Dos operadores
-
-checkProbBtDisc :: MonadProb m  => VarDisc -> OpComp -> Int -> OpComp -> Int -> m ()
-checkProbBtDisc v Gte k1 Lte k2 = do when (k1 > k2) (throwErrorE ProbInvalidForm)
-                                     checkSupportDisc v k1 k2
-checkProbBtDisc v Gt  k1 Lte k2 = do when (k1 + 1 > k2) (throwErrorE ProbInvalidForm)
-                                     checkSupportDisc v (k1 + 1) k2
-checkProbBtDisc v Gt  k1 Lt  k2 = do when (k1 + 1 > k2 - 1) (throwErrorE ProbInvalidForm)
-                                     checkSupportDisc v (k1 + 1) (k2 - 1)
-checkProbBtDisc v Gte k1 Lt  k2 = do when (k1 > k2 - 1) (throwErrorE ProbInvalidForm)
-                                     checkSupportDisc v k1 (k2 - 1)
-checkProbBtDisc _ _ _ _ _ = throwErrorE ProbInvalidForm
-
-
-checkSupportDisc :: MonadProb m  => VarDisc -> Int -> Int -> m ()
-checkSupportDisc (Bin n _)     _ k2 = when (k2 > n) (throwErrorE ProbInvalidForm)
-checkSupportDisc (Pasc r _)    k1 _ = when (k1 < r) (throwErrorE ProbInvalidForm)
-checkSupportDisc (Hiper m _ _) _ k2 = when (k2 > m) (throwErrorE ProbInvalidForm)
-checkSupportDisc (Custom xs _) _ k2 = when (V.all (/= k2) xs) (throwErrorE ProbInvalidForm)
-checkSupportDisc _ _ _ = return ()
-
-
-checkProbBtCont :: MonadProb m  => VarCont -> OpComp -> Double -> OpComp -> Double -> m ()
-checkProbBtCont _ Gte k1 Lte k2 = when (k1 >  k2) (throwErrorE ProbInvalidForm)
-checkProbBtCont _ Gt k1 Lte k2  = when (k1 >= k2) (throwErrorE ProbInvalidForm)
-checkProbBtCont _ Gt k1 Lt k2   = when (k1 >= k2) (throwErrorE ProbInvalidForm)
-checkProbBtCont _ Gte k1 Lt k2  = when (k1 >= k2) (throwErrorE ProbInvalidForm)
-checkProbBtCont _ _ _ _ _ = throwErrorE ProbInvalidForm
-
+checkComm (Table x) = checkDiscExp x
+checkComm (TableR x n m) = do checkDiscExp x
+                              checkNumExp n
+                              checkNumExp m
+checkComm (Plot x) = checkAleExp x
 
 ------------------------------------
--- Checker de variables aleatorias
-------------------------------------
-checkVarAle ::  MonadProb m  => VarAle -> m ()
-checkVarAle (Disc x) = checkVarDisc x
-checkVarAle (Cont x) = checkVarCont x
+-- Checker de expresiones principal
+-----------------------------------
+checkType :: MonadProb m => Exp -> m ()
+checkType (VarRef _)        = return ()
+checkType x@(ConstN  {}) = checkNumExp x
+checkType x@(UMinus  {}) = checkNumExp x
+checkType x@(OpNum   {}) = checkNumExp x
+checkType x@(Access  {}) = checkNumExp x
+checkType x@(Mean     {}) = checkNumExp x
+checkType x@(Variance    {}) = checkNumExp x
+checkType x@(StdDev    {}) = checkNumExp x
+checkType x@(FDP     {}) = checkNumExp x
+checkType x@(MaxP    {}) = checkNumExp x
+checkType x@(MaxFDP  {}) = checkNumExp x
+checkType x@(Prob     {}) = checkNumExp x
+checkType x@(ProbBetween   {}) = checkProb   x
+checkType x@(Mode    {}) = checkVecExp x
+checkType x@(ConstV  {}) = checkVecExp x
+checkType x@(Rand     {}) = checkAleExp x
+checkType x@(Node    {}) = checkMkExp  x 
+checkType x@(MkE   {}) = checkMkExp  x
+--------------------------------------------------------------- +
+-- Checker de probabilidades                                    |
+--------------------------------------------------------------- |
+checkProb :: MonadProb m => Exp -> m ()                      -- |
+checkProb (ProbBetween _ Eq _ _  _) = throwErrorE ProbInvalidForm  -- |
+checkProb (ProbBetween _ NEq _ _ _) = throwErrorE ProbInvalidForm  -- |   
+checkProb (ProbBetween _ _ _ Eq  _) = throwErrorE ProbInvalidForm  -- |
+checkProb (ProbBetween _ _ _ NEq _) = throwErrorE ProbInvalidForm  -- |
+checkProb (ProbBetween _ Lt _ _  _) = throwErrorE ProbInvalidForm  -- |
+checkProb (ProbBetween _ Lte _ _ _) = throwErrorE ProbInvalidForm  -- |
+checkProb (ProbBetween _ _ _ Gt  _) = throwErrorE ProbInvalidForm  -- |
+checkProb (ProbBetween _ _ _ Gte _) = throwErrorE ProbInvalidForm  -- |
+checkProb (ProbBetween  x _ n _  m) = do checkAleExp x
+                                   checkNumExp n
+                                   checkNumExp m
+checkProb _ = throwErrorE InvalidVarType
+
+---------------------------------------
+-- Checker de expresiones numericas
+----------------------------------------
+checkNumExp :: MonadProb m => Exp -> m ()
+checkNumExp (VarRef _)    = return ()
+checkNumExp (ConstN _) = return ()
+checkNumExp (UMinus x) = checkNumExp x
+checkNumExp (OpNum  _ x y) = do checkNumExp x
+                                checkNumExp y
+checkNumExp (Access v n) = do checkVecExp v
+                              checkNumExp n
+checkNumExp (Mean      x) = checkAleExp x
+checkNumExp (Variance     x) = checkAleExp x
+checkNumExp (StdDev     x) = checkAleExp x
+checkNumExp (FDP    x n) = do checkContExp x
+                              checkNumExp n
+checkNumExp (MaxP     x) = checkDiscExp x
+checkNumExp (MaxFDP   x) = checkContExp x
+checkNumExp (Prob  x _ n) = do checkAleExp x
+                              checkNumExp n
+checkNumExp x@(ProbBetween {}) = checkProb x
+checkNumExp _            = throwErrorE InvalidVarType
 
 
-checkVarDisc :: MonadProb m  => VarDisc -> m ()
-checkVarDisc (Bin n p) | p < 0 || p > 1 = throwErrorE InvalidProb
-                       | n < 0 = throwErrorE AleInvalidForm
-                       | otherwise      = return ()
 
-checkVarDisc (Poiss  l) | l < 0     = throwErrorE ProbInvalidForm
-                        | otherwise = return ()
-
-checkVarDisc (Geo p) | p < 0 || p > 1 = throwErrorE InvalidProb
-                     | otherwise      = return ()
-
-checkVarDisc (Pasc r p) | p < 0 || p > 1 = throwErrorE InvalidProb
-                        | r < 0          = throwErrorE AleInvalidForm
-                        | otherwise      = return ()
-
-checkVarDisc (Hiper m n r) | n > m     = throwErrorE AleInvalidForm
-                           | r > m     = throwErrorE AleInvalidForm
-                           | otherwise = return ()
-checkVarDisc (Custom xs ps) | V.null ps = throwErrorE AleInvalidForm
-                            | V.length xs /= V.length ps = throwErrorE AleInvalidForm
-                            | V.any (\p -> p < 0 || p > 1) ps = throwErrorE InvalidProb
-                            | abs (V.sum ps - 1) > 1e-6 = throwErrorE InvalidProb
-                            | otherwise = return ()
-
-checkVarCont :: MonadProb m  => VarCont -> m ()
-checkVarCont (Norm m u) | u < 0     = throwErrorE AleInvalidForm
-                        | otherwise = return ()
-checkVarCont (Unif a b) | a > b = throwErrorE AleInvalidForm
-                        | otherwise = return ()
-checkVarCont (Expo a) | a < 0 = throwErrorE AleInvalidForm
-                      | otherwise = return ()
+---------------------------------------
+--Checker de expresiones vectoriales
+---------------------------------------
+checkVecExp :: MonadProb m => Exp -> m ()
+checkVecExp (VarRef    _) = return ()
+checkVecExp (Mode   x) = checkAleExp x
+checkVecExp (ConstV v) = V.mapM_ checkNumExp v
+checkVecExp _          = throwErrorE InvalidVarType
 
 
+----------------------------------------------
+-- Checker de expresiones aleatorias
+---------------------------------------------
+checkAleExp :: MonadProb m => Exp -> m ()
+checkAleExp (VarRef _)         = return ()
+checkAleExp (Rand (DiscE x)) = checkDiscExp' x
+checkAleExp (Rand (ContE x)) = checkContExp' x
+checkAleExp _       = throwErrorE InvalidVarType
 
+
+checkDiscExp :: MonadProb m => Exp -> m ()
+checkDiscExp (VarRef _) = return ()
+checkDiscExp (Rand (DiscE x)) = checkDiscExp' x
+checkDiscExp _ = throwErrorE DiscVarExpected
+
+
+checkContExp :: MonadProb m => Exp -> m ()
+checkContExp (VarRef _) = return ()
+checkContExp (Rand (ContE x)) = checkContExp' x
+checkContExp _ = throwErrorE ContVarExpected
+
+
+
+
+
+checkDiscExp' :: MonadProb m => ExpDisc -> m ()
+checkDiscExp' (BinE n p) = do checkNumExp n
+                              checkNumExp p
+checkDiscExp' (PoissE l) = checkNumExp l
+checkDiscExp' (GeoE p) = checkNumExp p
+checkDiscExp' (PascE r p) = do checkNumExp r
+                               checkNumExp p
+checkDiscExp' (HiperE m r n) = do checkNumExp m
+                                  checkNumExp r
+                                  checkNumExp n
+checkDiscExp' (CustomE v s) = do checkVecExp v
+                                 checkVecExp s
+
+
+checkContExp' :: MonadProb m => ExpCont -> m ()
+checkContExp' (NormE m u) = do checkNumExp m
+                               checkNumExp u
+checkContExp' (UnifE a b) = do checkNumExp a
+                               checkNumExp b
+checkContExp' (ExpoE a) = checkNumExp a
+
+
+
+
+checkMkExp :: MonadProb m => Exp -> m ()
+checkMkExp (Node []) = throwErrorE AleInvalidForm
+checkMkExp (Node xs) = do checkng xs
+                            where
+                                checkng [] = return ()
+                                checkng ((_,y):ys) = do checkNumExp y
+                                                        checkng ys
+checkMkExp (MkE _) = return ()
+checkMkExp _ = throwErrorE InvalidProb

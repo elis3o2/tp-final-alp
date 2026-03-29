@@ -1,8 +1,8 @@
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use newtype instead of data" #-}
 module AST where
 import Common
 
-
-type Name = String
 
 -- valores
 data VarDisc =
@@ -21,77 +21,89 @@ data VarCont = Norm Double Double
 
   deriving (Show, Eq)
 
-data VarAle = Disc VarDisc | Cont VarCont   deriving (Show, Eq)
-
 
 -- expresiones
 data ExpDisc =
-    BinE ExpNum ExpNum
-  | PoissE ExpNum
-  | GeoE ExpNum
-  | PascE ExpNum ExpNum
-  | HiperE ExpNum ExpNum ExpNum
-  | CustomE ExpVec ExpVec
+    BinE Exp Exp
+  | PoissE Exp
+  | GeoE Exp
+  | PascE Exp Exp
+  | HiperE Exp Exp Exp
+  | CustomE Exp Exp
 
   deriving (Show, Eq)
 
-data ExpCont = NormE ExpNum ExpNum
-             | UnifE ExpNum ExpNum
-             | ExpoE ExpNum
+data ExpCont = NormE Exp Exp
+             | UnifE Exp Exp
+             | ExpoE Exp
 
   deriving (Show, Eq)
 
-data ExpAle = VarA  Name
-            | DiscE ExpDisc
-            | ContE ExpCont
+
+data RandExp = ContE ExpCont | DiscE ExpDisc deriving (Show, Eq)
+data RandVar = Cont  VarCont | Disc  VarDisc deriving (Show, Eq)
+
+
+
+data MakovExp
+  = Mk Chain
+  | StepProb MarkovExp Exp 
+  | Stationary MarkovExp
+
+
+
+data Exp
+  = VarRef Name
+  | ConstN NumC   
+  | UMinus Exp
+  | OpNum OpBin Exp Exp
+  -- acceso a vector
+  | Access Exp Exp
+
+  -- funciones sobre variables aleatorias
+  | Mean Exp
+  | Variance Exp
+  | StdDev Exp
+  | FDP Exp Exp
+  | MaxP Exp
+  | MaxFDP Exp
+
+  -- probabilidades
+  | Prob Exp OpComp Exp
+  | ProbBetween Exp OpComp Exp OpComp Exp
+
+  | Mk Exp Chain
+  | MkP  Exp Name Name Exp
+  | MakeChValue Exp Exp Exp
+  | PMkCh Exp Chain  
+
+  -- vectoriales
+  | ConstV (Vec Exp)
+  | Mode  Exp
+
+  -- aleatorias 
+  | Rand RandExp
+
+  -- Cadenas de Markov
+  | Mk MarkovExp
+
 
     deriving (Show, Eq)
 
 
 
-data ExpNum
-  = ConstN NumC 
-  | VarN Name
-  | UMinus ExpNum
-  | OpNum OpBin ExpNum ExpNum
-  
-  -- acceso a vector
-  | Access ExpVec ExpNum
-
-  -- funciones sobre variables aleatorias
-  | Esp ExpAle
-  | Vari ExpAle
-  | Desv ExpAle
-  | FDP ExpAle ExpNum
-  | MaxP ExpAle
-  | MaxFDP ExpAle
-
-  -- probabilidades
-  | POp ExpAle OpComp ExpNum
-  | POpBt ExpAle OpComp ExpNum OpComp ExpNum
-
-  deriving (Show, Eq)
+data Node = N  [(Name, Double)]       deriving (Show, Eq)
+data Markov = Mk (Vec Name) (Matrix Double)     deriving (Show, Eq)
 
 
-
-data ExpVec = 
-    VarV Name 
-  | ConstV (Vec ExpNum)
-  -- Funciones sobre variables aleatorias
-  | Moda  ExpAle
-  deriving (Show, Eq)
-
-
-data Exp =
-    ENum ExpNum
-  | EVec ExpVec
-  | EAle ExpAle
-  deriving (Show, Eq)
 
 data Value =
     VNum NumC
   | VVec (Vec NumC)
-  | VAle VarAle 
+  | VRand RandVar
+  | VMk Markov
+  | VN  Node
+
 
 
 
@@ -99,6 +111,8 @@ instance Show Value where
   show (VNum n) = show n
   show (VVec e) = show e
   show (VAle x) = show x  
+  show (VMk  m) = show m
+  show (VN   n) = show n
 
 
-data Comm = Print Exp | Let Name Exp
+data Comm = Print Exp | Let Name Exp | Table Exp | TableR Exp Exp Exp | Plot Exp 

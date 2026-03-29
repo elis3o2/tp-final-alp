@@ -1,14 +1,14 @@
 module Global where
 import AST
 import qualified Data.Map as M
+import Common
 
 
-
-type Env = M.Map Name Value
+data Env = Env {decls::M.Map Name Value, ndes::M.Map Name Node}
 
 -- | Valor del estado inicial
 initialEnv :: Env
-initialEnv = M.empty
+initialEnv = Env M.empty M.empty
 
 
 data Conf = Conf {

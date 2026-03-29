@@ -77,7 +77,8 @@ library
                       text,
                       prettyprinter,
                       prettyprinter-ansi-terminal,
-                      boxes
+                      boxes,
+                      easyplot
     -- Directories containing source files.
     hs-source-dirs:   src
 
@@ -92,6 +93,9 @@ library
                       Parse
                       CBin
                       PPrint
+                      Validator
+                      Table
+                      Lib
     -- Base language which the package is written in.
     default-language: Haskell2010
 

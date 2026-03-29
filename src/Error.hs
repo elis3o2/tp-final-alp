@@ -30,6 +30,7 @@ data EError
   | InvalidIndex
   | InvalidVarType
   | VarNotScoope
+  | TypeCheckError
 
   deriving (Eq)
 
@@ -45,6 +46,7 @@ instance Show EError where
   show InvalidIndex     = "Index not valid"
   show InvalidVarType   = "Variable type not adimited"
   show VarNotScoope     = "Variable not in scoope"
+  show TypeCheckError   = "Something went wrong with the TypeChecker"
 
 
 

@@ -2,10 +2,7 @@ module PPrint where
 
 import AST
 import Common
-import Monad
-import Eval
-import Global
-import Data.List (transpose)
+
 import Numeric (showFFloat)
 
 import qualified Data.Vector as V
@@ -18,13 +15,14 @@ import Prettyprinter
   , pretty
   , Doc
   , nest
+  , group
+  , line
   , sep
   , punctuate
   , defaultLayoutOptions
   , layoutSmart
   )
-import Prettyprinter.Render.Terminal( renderStrict, color, colorDull, Color(..), AnsiStyle )
-import qualified Text.PrettyPrint.Boxes as B
+import Prettyprinter.Render.Terminal( renderStrict,bold, color, colorDull, Color(..), AnsiStyle )
 
 formatDouble :: Double -> String
 formatDouble x = showFFloat (Just 24) x ""
@@ -34,14 +32,21 @@ render :: Doc AnsiStyle -> String
 render = unpack . renderStrict . layoutSmart defaultLayoutOptions
 
 -- Colores
-constColor :: Doc AnsiStyle -> Doc AnsiStyle
-constColor = annotate (color Red)
+numColor :: Doc AnsiStyle -> Doc AnsiStyle
+numColor = annotate (color Blue)
 
 opColor :: Doc AnsiStyle -> Doc AnsiStyle
 opColor = annotate (colorDull Green)
 
-keywordColor :: Doc AnsiStyle -> Doc AnsiStyle
-keywordColor = annotate (colorDull Green)
+varColor :: Doc AnsiStyle -> Doc AnsiStyle
+varColor = annotate (color Yellow)
+
+randomColor :: Doc AnsiStyle -> Doc AnsiStyle
+randomColor = annotate (color Magenta)
+
+functionColor :: Doc AnsiStyle -> Doc AnsiStyle
+functionColor = annotate (color Red <> bold)
+
 
 parenIf :: Bool -> Doc a -> Doc a
 parenIf True  = parens
@@ -49,14 +54,14 @@ parenIf False = id
 
 -- NumC
 numC2Doc :: NumC -> Doc AnsiStyle
-numC2Doc (I n) = constColor (pretty n)
-numC2Doc (D n) = constColor (pretty n)
+numC2Doc (I n) = numColor (pretty n)
+numC2Doc (D n) = numColor (pretty n)
 
 int2Doc :: Int -> Doc AnsiStyle
-int2Doc n = constColor (pretty n)
+int2Doc n = numColor (pretty n)
 
 double2Doc :: Double -> Doc AnsiStyle
-double2Doc n = constColor (pretty n)
+double2Doc n = numColor (pretty n)
 
 -- Operadores
 opBin2Doc :: OpBin -> Doc AnsiStyle
@@ -73,259 +78,162 @@ opComp2Doc Gte = opColor (pretty ">=")
 opComp2Doc Eq  = opColor (pretty "=")
 opComp2Doc NEq = opColor (pretty "/=")
 
+
 -- Distribuciones discretas
 varDisc2Doc :: VarDisc -> Doc AnsiStyle
 varDisc2Doc (Bin n p) =
-  keywordColor (pretty "Bin") <>
-  parens (int2Doc n <> pretty "," <+> double2Doc p)
+  group (randomColor (pretty "Bin") <> parens (
+  nest 2 (int2Doc n <> pretty "," <> line <> double2Doc p)))
 
 varDisc2Doc (Poiss l) =
-  keywordColor (pretty "Poi") <>
-  parens (double2Doc l)
+  group (randomColor (pretty "Poi") <> parens (
+  nest 2 (double2Doc l)))
 
 varDisc2Doc (Geo p) =
-  keywordColor (pretty "Geo") <>
-  parens (double2Doc p)
+  group (randomColor (pretty "Geo") <> parens (
+  nest 2 (double2Doc p)))
 
 varDisc2Doc (Pasc r p) =
-  keywordColor (pretty "Pasc") <>
-  parens (int2Doc r <> pretty "," <+> double2Doc p)
+  group (randomColor (pretty "Pasc") <> parens (
+  nest 2 (int2Doc r <> pretty "," <> line <> double2Doc p)))
 
 varDisc2Doc (Hiper m r n) =
-  keywordColor (pretty "Hiper") <>
-  parens (
-    int2Doc m <> pretty "," <+>
-    int2Doc r <> pretty "," <+>
+  group (randomColor (pretty "Hiper") <> parens (
+  nest 2 (
+    int2Doc m <> pretty "," <> line <>
+    int2Doc r <> pretty "," <> line <>
     int2Doc n
-  )
+  )))
+
+varDisc2Doc (Custom v1 v2) =
+  pretty "FALTA"
 
 -- Distribuciones continuas
 varCont2Doc :: VarCont -> Doc AnsiStyle
 varCont2Doc (Norm n m) =
-  keywordColor (pretty "Norm") <>
-  parens (
-    double2Doc n <> pretty "," <+>
+  group (randomColor (pretty "Norm") <> parens (
+  nest 2 (
+    double2Doc n <> pretty "," <> line <>
     double2Doc m
-  )
+  )))
 
 varCont2Doc (Unif a b) =
-  keywordColor (pretty "Unif") <>
-  parens (
-    double2Doc a <> pretty "," <+>
+  group (randomColor (pretty "Unif") <> parens (
+  nest 2 (
+    double2Doc a <> pretty "," <>
     double2Doc b
-  )
+  )))
 
 varCont2Doc (Expo a) =
-  keywordColor (pretty "Expo") <>
-  parens (double2Doc a)
+  randomColor (pretty "Expo") <> parens(
+  nest 2 (double2Doc a))
 
-varAle2Doc :: VarAle -> Doc AnsiStyle
+varAle2Doc :: RandVar -> Doc AnsiStyle
 varAle2Doc (Disc x) = varDisc2Doc x
 varAle2Doc (Cont x) = varCont2Doc x
 
 -- Expresiones discretas
 expDisc2Doc :: ExpDisc -> Doc AnsiStyle
 expDisc2Doc (BinE n p) =
-  keywordColor (pretty "Bin") <>
-  parens (expNum2Doc n <> pretty "," <+> expNum2Doc p)
+  group (randomColor (pretty "Bin") <> parens (
+  nest 2  (prettyExp n <> pretty "," <> line <> prettyExp p)))
 
 expDisc2Doc (PoissE l) =
-  keywordColor (pretty "Poi") <>
-  parens (expNum2Doc l)
+  group (randomColor (pretty "Poi") <> parens (
+  nest 2 (prettyExp l)))
 
 expDisc2Doc (GeoE p) =
-  keywordColor (pretty "Geo") <>
-  parens (expNum2Doc p)
+  group (randomColor (pretty "Geo") <> parens (
+  nest 2 (prettyExp p)))
 
 expDisc2Doc (PascE r p) =
-  keywordColor (pretty "Pasc") <>
-  parens (expNum2Doc r <> pretty "," <+> expNum2Doc p)
+  group (randomColor (pretty "Pasc") <> parens (
+  nest 2 (prettyExp r <> pretty ","  <> prettyExp p)))
 
-expDisc2Doc (HiperE m r n) =
-  keywordColor (pretty "Hiper") <>
-  parens (
-    expNum2Doc m <> pretty "," <+>
-    expNum2Doc r <> pretty "," <+>
-    expNum2Doc n
-  )
+expDisc2Doc (HiperE m r n) = 
+  group (randomColor (pretty "Hiper") <> parens(
+  nest 2 (
+    prettyExp m <> pretty "," <> line <>
+    prettyExp r <> pretty "," <> line <>
+    prettyExp n
+  )))
+
+expDisc2Doc _ =pretty "FALTA"
 
 -- Expresiones continuas
 expCont2Doc :: ExpCont -> Doc AnsiStyle
 expCont2Doc (NormE n m) =
-  keywordColor (pretty "Norm") <>
-  parens (
-    expNum2Doc n <> pretty "," <+>
-    expNum2Doc m
-  )
+  group (randomColor (pretty "Norm") <> parens (
+  nest 2 (
+    prettyExp n <> pretty "," <> line <>
+    prettyExp m
+  )))
 
 expCont2Doc (UnifE a b) =
-  keywordColor (pretty "Unif") <>
-  parens (
-    expNum2Doc a <> pretty "," <+>
-    expNum2Doc b
-  )
+  group (randomColor (pretty "Unif") <> parens (
+  nest 2 (
+    prettyExp a <> pretty "," <> line <>
+    prettyExp b
+  )))
 
 expCont2Doc (ExpoE a) =
-  keywordColor (pretty "Expo") <>
-  parens (expNum2Doc a)
+   group (randomColor (pretty "Expo") <> parens (
+  nest 2 (prettyExp a)))
 
-expAle2Doc :: ExpAle -> Doc AnsiStyle
-expAle2Doc (VarA x)   = pretty (show x)
+expAle2Doc :: RandExp -> Doc AnsiStyle
 expAle2Doc (DiscE x)  = expDisc2Doc x
 expAle2Doc (ContE x)  = expCont2Doc x
 
--- Expresiones numéricas
-expNum2Doc :: ExpNum -> Doc AnsiStyle
-expNum2Doc (ConstN i) = numC2Doc i
-expNum2Doc (VarN x)   = pretty (show x)
-
-expNum2Doc (UMinus n) =
-  pretty "-" <> expNum2Doc n
-
-expNum2Doc (OpNum Plus a b) =
-  expNum2Doc a <+> opBin2Doc Plus <+> expNum2Doc b
-
-expNum2Doc (OpNum Minus a b) =
-  expNum2Doc a <+> opBin2Doc Minus <+> maybeParenN b
-
-expNum2Doc (OpNum Times a b) =
-  maybeParenN a <+> opBin2Doc Times <+> maybeParenN b
-
-expNum2Doc (OpNum Div a b) =
-  maybeParenN a <+> opBin2Doc Div <+> maybeParenN b
-
-expNum2Doc (Access v n) =
-  maybeParenV v <> brackets (expNum2Doc n)
-
-expNum2Doc (Esp x) =
-  keywordColor (pretty "E") <> parens (expAle2Doc x)
-
-expNum2Doc (Vari x) =
-  keywordColor (pretty "V") <> parens (expAle2Doc x)
-
-expNum2Doc (Desv x) =
-  keywordColor (pretty "D") <> parens (expAle2Doc x)
-
-expNum2Doc (FDP x n) =
-  keywordColor (pretty "fdp") <> parens (expAle2Doc x <+> expNum2Doc n)
-
-expNum2Doc (MaxP x) =
-  keywordColor (pretty "maxP") <+> expAle2Doc x
-
--- Ajusta este constructor según tu AST:
--- si es MaxFDP ExpAle, usa el argumento; si no, quita "x".
-expNum2Doc (MaxFDP x)=
-  keywordColor (pretty "maxFDP") <> expAle2Doc x 
-
-expNum2Doc (POp x op n) =
-  keywordColor (pretty "P") <>
-  parens (expAle2Doc x <+> opComp2Doc op <+> expNum2Doc n)
-
-expNum2Doc (POpBt x op1 n op2 m) =
-  keywordColor (pretty "P") <>
-  parens (
-    expNum2Doc n <+> opComp2Doc op1  <+>
-    expAle2Doc x  <+>
-    opComp2Doc op2 <+> expNum2Doc m
-  )
-
-maybeParenN :: ExpNum -> Doc AnsiStyle
-maybeParenN e@(OpNum Plus  _ _)  = parens (expNum2Doc e)
-maybeParenN e@(OpNum Minus _ _)  = parens (expNum2Doc e)
-maybeParenN e                    = expNum2Doc e
 
 
 
-maybeParenV :: ExpVec -> Doc AnsiStyle
-maybeParenV e@(Moda _) = parens (expVec2Doc e)
-maybeParenV e          = expVec2Doc e
-
--- Vec
-vec2Doc :: Vec NumC -> Doc AnsiStyle
-vec2Doc v = parens $
-    sep $
-      punctuate (pretty ",") (map numC2Doc (V.toList v))
 
 
-
-expVec2Doc :: ExpVec -> Doc AnsiStyle
-expVec2Doc (VarV v) =
-  pretty v
-
-expVec2Doc (ConstV v) =
-  parens $
-    sep $
-      punctuate (pretty ",") (map expNum2Doc (V.toList v))
-
-expVec2Doc (Moda x) =
-  keywordColor (pretty "moda") <+> expAle2Doc x
-
-
-ppValue ::  Value -> String 
+ppValue ::  Value -> String
 ppValue (VAle x) = render (varAle2Doc x)
 ppValue (VNum x) = render (numC2Doc x)
-ppValue (VVec x) = render (vec2Doc x)
+ppValue (VVec x) = render (parens $ sep $ punctuate (pretty ",") (map numC2Doc (V.toList x)))
 
 
 
-renderTable :: [String] -> [[String]] -> String
-renderTable headers rows =
-  B.render $
-    B.vsep 0 B.left $
-      [ sepLine
-      , rowHeader headers
-      , sepLine
-      ]
-      ++ concatMap (\r -> [row r, sepLine]) rows
-  where
-    -- ancho de cada columna
-    colWidths =
-      map (maximum . map length) $
-        transpose (headers : rows)
-
-    -- alinear derecha (para números)
-    padLeft w s = replicate (w - length s) ' ' ++ s
-
-    -- centrar (para headers)
-    padCenter w s =
-      let total = w - length s
-          left  = total `div` 2
-          right = total - left
-      in replicate left ' ' ++ s ++ replicate right ' '
-
-    -- fila normal
-    row xs =
-      B.hcat B.left $
-        [B.text "|"]
-        ++ concat
-            [ [ B.text (" " ++ padLeft w x ++ " ")
-              , B.text "|"
-              ]
-            | (w, x) <- zip colWidths xs
-            ]
-
-    -- header centrado
-    rowHeader xs =
-      B.hcat B.left$
-        [B.text "|"]
-        ++ concat
-            [ [ B.text (" " ++ padCenter w x ++ " ")
-              , B.text "|"
-              ]
-            | (w, x) <- zip colWidths xs
-            ]
-
-    -- línea separadora
-    sepLine =
-      B.text $
-        concatMap (\w -> "+" ++ replicate (w + 2) '-') colWidths ++ "+"
+prettyExp :: Exp -> Doc AnsiStyle
+prettyExp (ConstN i) = numC2Doc i
+prettyExp (VarRef x)    = varColor (pretty x)
+prettyExp (UMinus n) = pretty "-" <> maybeParenN n
+prettyExp (OpNum Plus  a b) = prettyExp a <+> opBin2Doc Plus <+> prettyExp b
+prettyExp (OpNum Minus a b) = prettyExp a <+> opBin2Doc Minus <+> maybeParenN b
+prettyExp (OpNum Times a b) = maybeParenN a <+> opBin2Doc Times <+> maybeParenN b
+prettyExp (OpNum Div   a b) = maybeParenN a <+> opBin2Doc Div   <+> maybeParenN b
+prettyExp (Access v n) = maybeParenN v <> brackets (prettyExp n)
+prettyExp (Mean x)  = functionColor (pretty "E") <> parens (prettyExp x)
+prettyExp (Variance x) = functionColor (pretty "V") <> parens (prettyExp x)
+prettyExp (StdDev x) = functionColor (pretty "D") <> parens (prettyExp x)
+prettyExp (FDP x n) = functionColor (pretty "fdp") <> parens (prettyExp x <+> prettyExp n)
+prettyExp (MaxP x) = functionColor (pretty "maxP") <+> prettyExp x
+prettyExp (MaxFDP x)= functionColor (pretty "maxFDP") <> prettyExp x
+prettyExp (Prob x op n)          = functionColor (pretty "P") <> parens (
+                                                          prettyExp x <+>
+                                                          opComp2Doc op
+                                                          <+> prettyExp n)
+prettyExp (ProbBetween x op1 n op2 m) = functionColor (pretty "P") <> parens (
+                                                            prettyExp n <+>
+                                                            opComp2Doc op1  <+>
+                                                            prettyExp x  <+>
+                                                            opComp2Doc op2 <+>
+                                                            prettyExp m
+                                                          )
+prettyExp (ConstV v) = parens $ sep $ punctuate (pretty ",") (map prettyExp (V.toList v))
+prettyExp (Mode x) = functionColor (pretty "moda") <+> prettyExp x
+prettyExp (Rand x) = expAle2Doc x
 
 
-getValuesDisc :: VarDisc -> [[String]]
-getValuesDisc x@(Bin n p) = [[show k, formatDouble(getProbDisc x Eq k)] | k <- [0..n] ]
-getValuesDisc _ = [[]] 
 
 
-discTable :: VarAle -> String
-discTable (Disc x) = renderTable ["X", "P(X)"] (getValuesDisc x)
-discTable _ = ""
+
+
+maybeParenN :: Exp -> Doc AnsiStyle
+maybeParenN e@(OpNum Plus  _ _)  = parens (prettyExp e)
+maybeParenN e@(OpNum Minus _ _)  = parens (prettyExp e)
+maybeParenN e                    = prettyExp e
+
+

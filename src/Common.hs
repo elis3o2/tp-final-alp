@@ -7,13 +7,17 @@ instance Show NumC where
   show (I n) = show n
   show (D n) = show n
 
+
+
 type Vec a = V.Vector a
+type Matrix a = Vec (Vec a)
+type Name = String
+type Chain = [Name]
 
 -- Operadores
 data OpComp  = Lt | Gt | Lte | Gte | Eq | NEq deriving (Show, Eq)
 
 data OpBin = Plus | Minus | Times | Div deriving (Show, Eq)
-
 
 
 indexOf :: Eq a => Vec a -> a -> Int

@@ -39,7 +39,7 @@ langDef = emptyDef
       , "Unif", "Uniforme"
       , "P", "E", "SD", "V", "fdp"
       , "moda", "antimoda", "maxP", "minP", "maxFDP"
-      , "print"
+      , "mk" ,"print", "table", "plot"
       ]
   , reservedOpNames =
       [ "=", ",", "->", "<-", "~"
@@ -96,30 +96,31 @@ lowerString = Tok.lexeme lexer $ try $ do
 parseNumV :: P NumC
 parseNumV = try (D <$> double) <|> (I . fromInteger <$> natural)
 
-parseConstNum :: P ExpNum
+parseConstNum :: P Exp
 parseConstNum = ConstN <$> parseNumV
 
-parseNameNumV :: P Name
-parseNameNumV = lowerString
+parseNameL :: P Name
+parseNameL = lowerString
 
-parseNameVec :: P Name
-parseNameVec = lowerString
+parseNameU :: P Name
+parseNameU = upperString
 
-parseNameAle :: P Name
-parseNameAle = upperString
+parseVarL :: P Exp
+parseVarL = VarRef <$> parseNameL
 
-parseNumVar :: P ExpNum
-parseNumVar = VarN <$> parseNameNumV
+parseVarU :: P Exp
+parseVarU = VarRef <$> parseNameU
 
-parseUMinus :: P ExpNum
+
+parseUMinus :: P Exp
 parseUMinus = do reservedOp "-"
                  UMinus <$> parseNumBaseAtom
 
-parseAddOp :: P (ExpNum -> ExpNum -> ExpNum)
+parseAddOp :: P (Exp -> Exp -> Exp)
 parseAddOp = (reservedOp "+"  >> return (OpNum Plus))
          <|> (reservedOp "-" >> return (OpNum Minus))
 
-parseMulOp :: P (ExpNum -> ExpNum -> ExpNum)
+parseMulOp :: P (Exp -> Exp -> Exp)
 parseMulOp = (reservedOp "*" >> return (OpNum Times))
          <|> (reservedOp "/" >> return (OpNum Div))
 
@@ -127,54 +128,54 @@ parseMulOp = (reservedOp "*" >> return (OpNum Times))
 -- Expresiones numéricas
 -----------------------
 
-parseNumBaseAtom :: P ExpNum
+parseNumBaseAtom :: P Exp
 parseNumBaseAtom =
       try prob
   <|> try parseAccess
   <|> try parseNumFunc
   <|> try parseConstNum
-  <|> try parseNumVar
+  <|> try parseVarL
   <|> parens parseNumExp
 
-parseNumAtom :: P ExpNum
+parseNumAtom :: P Exp
 parseNumAtom =
       try parseUMinus
   <|> parseNumBaseAtom
 
-parseNumTerm :: P ExpNum
+parseNumTerm :: P Exp
 parseNumTerm = chainl1 parseNumAtom parseMulOp
 
-parseNumExp :: P ExpNum
+parseNumExp :: P Exp
 parseNumExp = chainl1 parseNumTerm parseAddOp
 
 ---------------------------
 -- Probabilidades
 ---------------------------
 
-prob :: P ExpNum
+prob :: P Exp
 prob = do reserved "P"
           parens parseProb
 
-parseProb :: P ExpNum
+parseProb :: P Exp
 parseProb = try parsePOpBt <|> parsePOp
 
-parsePOp :: P ExpNum
+parsePOp :: P Exp
 parsePOp = try (do n <- parseNumExp
                    op <- parseOp
                    v <- parseAleExp
-                   return (POp v op n))
+                   return (Prob v op n))
       <|> do v <- parseAleExp
              op <- parseOp
              n <- parseNumExp
-             return (POp v op n)
+             return (Prob v op n)
 
-parsePOpBt :: P ExpNum
+parsePOpBt :: P Exp
 parsePOpBt = do n <- parseNumExp
                 op1 <- parseOp
                 v <- parseAleExp
                 op2 <- parseOp
                 m <- parseNumExp
-                return (POpBt v op1 n op2 m)
+                return (ProbBetween v op1 n op2 m)
 
 parseOp :: P OpComp
 parseOp = try (reservedOp "<=" >> return Lte)
@@ -188,25 +189,23 @@ parseOp = try (reservedOp "<=" >> return Lte)
 -- Vectores
 -----------------------
 
-parseVector :: P (Vec ExpNum)
+parseVector :: P (Vec Exp)
 parseVector = V.fromList <$> parens (parseNumExp `sepBy1` reservedOp ",")
 
-parseConstVec :: P ExpVec
+parseConstVec :: P Exp
 parseConstVec = ConstV <$> parseVector
 
-parseVecName :: P ExpVec
-parseVecName = VarV <$> parseNameVec
 
-parseVecFunc :: P ExpVec
+parseVecFunc :: P Exp
 parseVecFunc = try parseModa
 
-parseVecAtom :: P ExpVec
-parseVecAtom = try parseConstVec <|> try parseVecName <|> parseVecFunc
+parseVecAtom :: P Exp
+parseVecAtom = try parseConstVec <|> try parseVarL <|> parseVecFunc
 
-parseVecExp :: P ExpVec
+parseVecExp :: P Exp
 parseVecExp = parseVecAtom
 
-parseAccess :: P ExpNum
+parseAccess :: P Exp
 parseAccess = do
   v <- parseVecExp
   n <- brackets parseNumExp
@@ -216,17 +215,17 @@ parseAccess = do
 -- Variables aleatorias
 ----------------------
 
-parseAleName :: P ExpAle
-parseAleName = VarA <$> parseNameAle
+parseAleExp :: P Exp
+parseAleExp = try parseVarU <|>
+ try (Rand <$> parseVarDisc) <|> (Rand <$> parseVarCont)
 
-parseAleExp :: P ExpAle
-parseAleExp = try parseAleName <|> try parseVarDisc <|> parseVarCont
+
 
 ----------------------
 -- Discretas
 ----------------------
 
-parseVarDisc :: P ExpAle
+parseVarDisc :: P RandExp
 parseVarDisc = try parseBin
            <|> try parsePoiss
            <|> try parseGeo
@@ -234,7 +233,7 @@ parseVarDisc = try parseBin
            <|> try parseHiper
            <|> parseCustom
 
-parseBin :: P ExpAle
+parseBin :: P RandExp
 parseBin = do
   try (reserved "Bin") <|> reserved "Binomial"
   parens $ do
@@ -243,19 +242,19 @@ parseBin = do
     p <- parseNumExp
     return (DiscE (BinE n p))
 
-parsePoiss :: P ExpAle
+parsePoiss :: P RandExp
 parsePoiss = do try (reserved "Poi") <|> reserved "Poisson"
                 parens $ do
                     n <- parseNumExp
                     return (DiscE (PoissE n))
 
-parseGeo :: P ExpAle
+parseGeo :: P RandExp
 parseGeo = do try (reserved "Geo") <|> reserved "Geometrica"
               parens $ do
                   p <- parseNumExp
                   return (DiscE (GeoE p))
 
-parsePasc :: P ExpAle
+parsePasc :: P RandExp
 parsePasc = do try (reserved "BN") <|> reserved "Pascal"
                parens $ do
                   n <- parseNumExp
@@ -263,7 +262,7 @@ parsePasc = do try (reserved "BN") <|> reserved "Pascal"
                   p <- parseNumExp
                   return (DiscE (PascE n p))
 
-parseHiper :: P ExpAle
+parseHiper :: P RandExp
 parseHiper = do try (reserved "HG") <|> reserved "Hipergeometrica"
                 parens $ do
                     n <- parseNumExp
@@ -273,7 +272,7 @@ parseHiper = do try (reserved "HG") <|> reserved "Hipergeometrica"
                     r <- parseNumExp
                     return (DiscE (HiperE n m r))
 
-parseCustom :: P ExpAle
+parseCustom :: P RandExp
 parseCustom = brackets $ do
   v1 <- parseVecExp
   reservedOp ","
@@ -284,23 +283,23 @@ parseCustom = brackets $ do
 -- Continuas
 ----------------------
 
-parseVarCont :: P ExpAle
+parseVarCont :: P RandExp
 parseVarCont = try parseNorm <|> try parseUnif <|> parseExpo
 
-parseNorm :: P ExpAle
+parseNorm :: P RandExp
 parseNorm = do try (reserved "N") <|> reserved "Normal"
                parens $ do
                  m <- parseNumExp
                  reservedOp ","
                  u <- parseNumExp
                  return (ContE (NormE m u))
-parseExpo :: P ExpAle
+parseExpo :: P RandExp
 parseExpo = do try (reserved "Exp") <|> reserved "Exponencial"
                parens $ do
                   a <- parseNumExp
                   return (ContE (ExpoE a))
 
-parseUnif :: P ExpAle
+parseUnif :: P RandExp
 parseUnif = do try (reserved "Unif") <|> reserved "Uniforme"
                parens $ do
                   a <- parseNumExp
@@ -308,11 +307,12 @@ parseUnif = do try (reserved "Unif") <|> reserved "Uniforme"
                   b <- parseNumExp
                   return (ContE (UnifE a b))
 
+
 ----------------------
 -- Funciones numéricas sobre aleatorias
 ----------------------
 
-parseNumFunc :: P ExpNum
+parseNumFunc :: P Exp
 parseNumFunc = try parseEsp
            <|> try parseVari
            <|> try parseDesv
@@ -320,22 +320,22 @@ parseNumFunc = try parseEsp
            <|> try parseMaxP
            <|> parseMaxFDP
 
-parseEsp :: P ExpNum
+parseEsp :: P Exp
 parseEsp = do reserved "E"
               v <- parens parseAleExp
-              return (Esp v)
+              return (Mean v)
 
-parseVari :: P ExpNum
+parseVari :: P Exp
 parseVari = do reserved "V"
                v <- parens parseAleExp
-               return (Vari v)
+               return (Variance v)
 
-parseDesv :: P ExpNum
+parseDesv :: P Exp
 parseDesv = do reserved "SD"
                v <- parens parseAleExp
-               return (Desv v)
+               return (StdDev v)
 
-parseFdp :: P ExpNum
+parseFdp :: P Exp
 parseFdp = do reserved "fdp"
               parens $ do
                 v <- parseAleExp
@@ -343,13 +343,13 @@ parseFdp = do reserved "fdp"
                 n <- parseNumExp
                 return (FDP v n)
 
-parseMaxP :: P ExpNum
+parseMaxP :: P Exp
 parseMaxP = do reserved "maxP"
                v <- parens parseAleExp
                return (MaxP v)
 
 
-parseMaxFDP :: P ExpNum
+parseMaxFDP :: P Exp
 parseMaxFDP = do reserved "maxFDP"
                  v <- parens parseAleExp
                  return (MaxFDP v)
@@ -358,10 +358,17 @@ parseMaxFDP = do reserved "maxFDP"
 -- Funciones vectoriales
 ----------------------
 
-parseModa :: P ExpVec
+parseModa :: P Exp
 parseModa = do reserved "moda"
                v <- parens parseAleExp
-               return (Moda v)
+               return (Mode v)
+
+
+
+
+
+parseExp :: P Exp
+parseExp = try parseNumExp <|> try parseVecExp <|> parseAleExp
 
 
 ----------------------
@@ -371,46 +378,74 @@ parseModa = do reserved "moda"
 parseDecNum :: P Comm
 parseDecNum = do x <- lowerString
                  reservedOp "="
-                 v <- parseNumExp
-                 return (Let x (ENum v))
+                 e <- parseNumExp 
+                 return (Let x e)
 
 parseDecAle :: P Comm
 parseDecAle = do x <- upperString
                  reservedOp "~" <|> reservedOp ":="
-                 v <- parseAleExp
-                 return (Let x (EAle v))
+                 e <- parseAleExp
+                 return (Let x e)
 
 parseDecVec :: P Comm
 parseDecVec = do x <- lowerString
                  reservedOp "="
-                 v <- parseVecExp
-                 return (Let x (EVec v))
+                 e <- parseVecExp
+                 return (Let x e)
+
+parseDecMk :: P Comm
+parseDecMk = do x <- upperString
+                reservedOp "="
+                e <- parseMk
+                return (Let x e)
+
 
 parsePrintNum :: P Comm 
 parsePrintNum = do reserved "print"
-                   e <- parens parseNumExp
-                   return(Print (ENum e))
+                   e <- parens parseExp
+                   return(Print e)
 
-parsePrintVec :: P Comm 
-parsePrintVec = do reserved "print"
-                   e <- parens parseVecExp
-                   return(Print (EVec e))
-
-parsePrintAle :: P Comm 
-parsePrintAle = do reserved "print"
-                   e <- parens parseAleExp
-                   return(Print (EAle e))
-
-
-----------------------
--- Wrapper opcional para programa
-----------------------
+parseTable :: P Comm 
+parseTable = do reserved "table"
+                parens $ do
+                  x <- parseAleExp
+                  (do reservedOp ","
+                      n <- parseNumExp
+                      reservedOp ","
+                      m <- parseNumExp
+                      return (TableR x n m))
+                   <|> return (Table x) 
 
 
+parsePlot :: P Comm
+parsePlot = do reserved "plot"
+               x <- parens parseAleExp
+               return (Plot x) 
+
+
+parseNeight :: P (Name, Exp)
+parseNeight = do parens $ do
+                  n <- identifier
+                  reservedOp ","
+                  p <- parseNumExp
+                  return (n,p) 
+
+parseNode :: P Comm 
+parseNode = do n <- identifier
+               reservedOp "->"
+               brackets $ do
+                l <- (parseNeight `sepBy1` reservedOp ",")
+                return (Let n (Node l))
+
+parseMk :: P Exp  
+parseMk = do reserved "mk"
+             l <- parens (identifier `sepBy1` reservedOp ",")
+             return (MkE l)
 
 parseComm :: P Comm
 parseComm =   try parseDecNum <|> try parseDecAle <|> try parseDecVec
-          <|> try parsePrintNum <|> try parsePrintAle <|> try parsePrintVec
+          <|> try parsePrintNum <|> try parseTable <|> try parsePlot 
+          <|> try parseNode <|> parseDecMk
 
 
 -- | Parser de programas (listas de declaraciones) 
