@@ -16,38 +16,54 @@ import Text.Parsec.Error ( ParseError )
 data Error
   = ParseErr ParseError
   | ExecErr EError
+  | TypeErr TError 
   deriving (Show)
 
 data EError
   = DivByZero
   | NotDefined
   | IntValueExpected
-  | ContVarExpected
-  | DiscVarExpected
   | AleInvalidForm
   | ProbInvalidForm
   | InvalidProb
   | InvalidIndex
-  | InvalidVarType
-  | VarNotScoope
   | TypeCheckError
 
   deriving (Eq)
+
+
+data TError =
+    ContExpExpected
+  | DiscExpExpected
+  | VecExpExpected
+  | RandExpExpected
+  | NumExpExpected
+  | ChainExpExpected
+  | VarNotScoope
+  | InvalidVarType
+  | EmptyChain
+  | MkExpExpected
+
 
 instance Show EError where
   show DivByZero        = "Division by zero"
   show NotDefined       = "Function not defined"
   show IntValueExpected = "Int value was expected"
-  show ContVarExpected  = "Continuous variable was expected"
-  show DiscVarExpected  = "Discrete variable was expected"
   show ProbInvalidForm  = "Ranges at probability function not valid"
   show AleInvalidForm   = "Random Variable form not valid"
   show InvalidProb      = "Probability not valid"
   show InvalidIndex     = "Index not valid"
-  show InvalidVarType   = "Variable type not adimited"
-  show VarNotScoope     = "Variable not in scoope"
   show TypeCheckError   = "Something went wrong with the TypeChecker"
 
 
-
-
+instance Show TError where
+  show InvalidVarType   = "Variable type not adimited"
+  show VarNotScoope     = "Variable not in scoope"
+  show ContExpExpected  = "Continuous expression was expected"
+  show DiscExpExpected  = "Discrete expression was expected"
+  show NumExpExpected   = "Numeric expression was expected"
+  show VecExpExpected   = "Vector expression was expected"
+  show RandExpExpected  = "Random expression was expected"
+  show ChainExpExpected = "Chain expression was expected"
+  show EmptyChain       = "Chains can´t be empyt"
+  show MkExpExpected    = "Markov Expression was expected"
