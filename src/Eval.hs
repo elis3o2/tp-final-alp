@@ -10,98 +10,48 @@ import Lib
 import qualified Data.Vector as V
 import Numeric.SpecFunctions (erf)
 import qualified Data.Map as M
-
+import Matrix
+import Validator (valMkName, toInt)
+import Random
 -------------------------------------
 -- Evaluadores de operaciones binarias
 -------------------------------------
 
-evalOpBin :: MonadProb m => OpBin -> NumC -> NumC -> m NumC
-evalOpBin Div _ (I 0) = throwErrorE DivByZero
-evalOpBin Div _ (D 0) = throwErrorE DivByZero
-
-evalOpBin Plus  (I n) (I m) = return (I (n + m))
-evalOpBin Minus (I n) (I m) = return (I (n - m))
-evalOpBin Times (I n) (I m) = return (I (n * m))
-evalOpBin Div   (I n) (I m) = return $ tryToInt (D (fromIntegral n / fromIntegral m))
-
-evalOpBin Plus  (D n) (D m) = return (tryToInt (D (n + m)))
-evalOpBin Minus (D n) (D m) = return (tryToInt (D (n - m)))
-evalOpBin Times (D n) (D m) = return (tryToInt (D (n * m)))
-evalOpBin Div   (D n) (D m) = return (tryToInt (D (n / m)))
-
-evalOpBin op x y = evalOpBin op (makeDouble x) (makeDouble y)
-                           where
-                              makeDouble (I n) = D (fromIntegral n)
-                              makeDouble s     = s
-
+evalOpBin :: MonadProb m => OpBin -> Double -> Double -> m Double
+evalOpBin Div _ 0 = throwErrorE DivByZero
+evalOpBin Plus  n m = return (n + m)
+evalOpBin Minus n m = return (n - m)
+evalOpBin Times n m = return (n * m)
+evalOpBin Div   n m = return (n / m)
 
 -------------------------------------
 -- Probabilidad
 -------------------------------------
 
-getProb :: MonadProb m => RandVar -> OpComp -> NumC -> m Double
+getProb :: MonadProb m => RandVar -> OpComp -> Double -> m Double
 getProb (Disc x) op k = do k' <- toInt k
                            valProbDisc x op k'
                            return (getProbDisc x op k')
 
-getProb (Cont x) op z = do z' <- toDouble z
-                           return (getProbCont x op z')
+getProb (Cont x) op z = do return (getProbCont x op z)
 
 
 
-getProbBt :: MonadProb m => RandVar -> OpComp -> NumC -> OpComp -> NumC -> m Double
+getProbBt :: MonadProb m => RandVar -> OpComp -> Double -> OpComp -> Double -> m Double
 getProbBt (Disc x) op1 k1 op2 k2 = do k1' <- toInt k1
                                       k2' <- toInt k2
                                       valProbBtDisc x op1 k1' op2 k2'
                                       return (getProbBtDisc x op1 k1' op2 k2')
 
-getProbBt (Cont x) op1 z1 op2 z2 = do z1' <- toDouble z1
-                                      z2' <- toDouble z2
-                                      valProbBtCont x op1 z1' op2 z2'
-                                      return (getProbBtCont x op1 z1' op2 z2')
+getProbBt (Cont x) op1 z1 op2 z2 = do valProbBtCont x op1 z1 op2 z2
+                                      return (getProbBtCont x op1 z1 op2 z2)
 
 
---- Mode
-getModa :: MonadProb m => RandVar -> m (Vec NumC)
-getModa (Cont (Unif _ _)) = throwErrorE NotDefined
-getModa (Disc x) = return $ V.map I (getModaDisc x)
-getModa (Cont x) = return $ V.map D (getModaCont x)
 
-------------------------------------
--- Máxima probabilidad
-------------------------------------
-getMaxP :: MonadProb m => RandVar -> m Double
-getMaxP (Disc x) = let v = getModaDisc x
-                       k = V.head v
-                       p = getProbDisc x Eq k
-                    in return p
-getMaxP (Cont x) = throwErrorE DiscVarExpected
-
-
--------------------------------------
--- Función de densidad de probabilidad y su punto máximo
--------------------------------------
------- FDP
-getFDP :: MonadProb m => RandVar -> Double -> m Double
-getFDP (Cont (Norm m s)) x = return (1 / (s * sqrt (2 * pi)) *
-                                   exp (- ((x - m)^2) / (2 * s^2)))
-getFDP (Cont (Expo l)) x = if x < 0 then
-                              return 0 else return (l * exp (-l * x))
-getFDP (Cont (Unif a b)) x = if x < a || x > b
-                             then return 0 else
-                             return (1 / (b - a))
-getFDP (Disc _) _ = throwErrorE DiscVarExpected
------- MaxFDP 
-
-getMaxFDP :: MonadProb m => RandVar -> m Double
-getMaxFDP x@(Cont (Norm m _)) = getFDP x m
-getMaxFDP x@(Cont (Expo _))   = getFDP x 0
-getMaxFDP x@(Cont (Unif a _)) = getFDP x a
-getMaxFDP (Disc _) = throwErrorE ContVarExpected
 -------------------------------------
 -- Funciones sobre vectores 
 -------------------------------------
-access :: MonadProb m => Vec NumC -> Int -> m NumC
+access :: MonadProb m => Vec Double -> Int -> m Double
 access v i | i < 0 || i > V.length v - 1 = throwErrorE InvalidIndex
            | otherwise = return (v V.! i)
 
@@ -109,51 +59,64 @@ access v i | i < 0 || i > V.length v - 1 = throwErrorE InvalidIndex
 -------------------------------------
 -- Evaluación de expresiones Numericas
 -------------------------------------
-evalExpNum :: MonadProb m => Exp -> m NumC
-evalExpNum (VarRef v)    = getNumC v
-evalExpNum (ConstN n) = return n
-evalExpNum (OpNum op n m) = do n' <- evalExpNum n
-                               m' <- evalExpNum m
+evalNumExp :: MonadProb m => Exp -> m Double
+evalNumExp (VarRef v)    = getNumC v
+evalNumExp (ConstN n) = return n
+evalNumExp (OpNum op n m) = do n' <- evalNumExp n
+                               m' <- evalNumExp m
                                v  <- evalOpBin op n' m'
                                return v
-evalExpNum (Prob v op k) = do v' <- evalExpAle v
-                             k' <- evalExpNum k
-                             p  <- getProb v' op k'
-                             return (D p)
+evalNumExp (Prob v op k) = do v' <- evalRandExp v
+                              k' <- evalNumExp k
+                              p  <- getProb v' op k'
+                              return p
 
-evalExpNum s@(ProbBetween v op1 k1 op2 k2) = do v'  <- evalExpAle v
-                                          k1' <- evalExpNum k1
-                                          k2' <- evalExpNum k2
-                                          p   <- getProbBt v' op1 k1' op2 k2'
-                                          return (D p)
+evalNumExp (ProbBetween v op1 k1 op2 k2) = do v'  <- evalRandExp v
+                                              k1' <- evalNumExp k1
+                                              k2' <- evalNumExp k2
+                                              p   <- getProbBt v' op1 k1' op2 k2'
+                                              return p
 
-evalExpNum (Access v n) = do n' <- evalExpNum n >>= toInt
-                             v' <- evalExpVec v
+evalNumExp (Access v n) = do n' <- evalNumExp n >>= toInt
+                             v' <- evalVecExp v
                              x  <- access v' n'
                              return x
 
-evalExpNum (Mean v) = do v' <- evalExpAle v
-                        return (D (getEsp v'))
+evalNumExp (Mean v) = do v' <- evalRandExp v
+                         return (getEsp v')
 
-evalExpNum (Variance v) = do v' <- evalExpAle v
-                         return (D (getVari v'))
+evalNumExp (Variance v) = do v' <- evalRandExp v
+                             return (getVari v')
 
-evalExpNum (StdDev v) = do v' <- evalExpAle v
-                         return (D (getDesv v'))
+evalNumExp (StdDev v) = do v' <- evalRandExp v
+                           return (getDesv v')
 
-evalExpNum (MaxP v) = do v' <- evalExpAle v
-                         k  <- getMaxP v'
-                         return (D k)
+evalNumExp (MaxP v) = do v' <- evalRandExp v
+                         return (getMaxP v')
 
-evalExpNum (FDP v x) = do v' <- evalExpAle v
-                          x' <- evalExpNum x >>= toDouble
-                          d  <- getFDP v' x'
-                          return (D d)
+evalNumExp (FDP v x) = do v' <- evalRandExp v
+                          x' <- evalNumExp x 
+                          return (getFDP v' x')
 
-evalExpNum (MaxFDP v) = do v' <- evalExpAle v
-                           d  <- getMaxFDP v'
-                           return (D d)
-evalExpNum  _ = throwErrorE TypeCheckError
+evalNumExp (MaxFDP v) = do v' <- evalRandExp v
+                           return (getMaxFDP v')
+
+evalNumExp (ProbStep x i j n) = do x' <- evalMarkovExp x
+                                   n' <- evalNumExp n >>= toInt
+                                   valMkName x' i
+                                   valMkName x' j 
+                                   return (getProbSteps x' i j n')
+evalNumExp (ProbPath x c)     = do x' <- evalMarkovExp x 
+                                   c' <- evalPathExp c 
+                                   valMkPath x' c'
+                                   return (getProbPath x' c')
+evalNumExp (ProbHit x i j)    = do x' <- evalMarkovExp x
+                                   valMkName x' i
+                                   valMkName x' j                                   
+                                   return (getProbHit x' i j)
+
+
+evalNumExp  _ = throwErrorE TypeCheckError
 
 
 
@@ -161,108 +124,137 @@ evalExpNum  _ = throwErrorE TypeCheckError
 --- Evaluador de Vectores
 --------------------------------
 
-evalExpVec :: MonadProb m => Exp -> m (Vec NumC)
-evalExpVec (VarRef x)    = getVec x
-evalExpVec (ConstV v) = V.mapM evalExpNum v
-evalExpVec (Mode x)   = do x' <- evalExpAle x
-                           m <- getModa x'
-                           return m
-evalExpVec _         = throwErrorE TypeCheckError
+evalVecExp :: MonadProb m => Exp -> m (Vec Double)
+evalVecExp (VarRef x) = getVec x
+evalVecExp (ConstV v) = V.mapM evalNumExp v
+evalVecExp (Mode x)   = do x' <- evalRandExp x
+                           return (getMode x')
+evalVecExp (Stationary x) = do x' <- evalMarkovExp x
+                               return (getStationary x')
+evalVecExp _         = throwErrorE TypeCheckError
 
 
 -------------------------------------
 -- Evaluador de Variables Aleatorias
 -------------------------------------
 
-evalExpAle :: MonadProb m => Exp -> m RandVar
-evalExpAle (VarRef x)         = getAle x 
-evalExpAle (Rand (DiscE x)) = Disc <$> evalExpDisc x
-evalExpAle (Rand (ContE x)) = Cont <$> evalExpCont x
-evalExpAle _ = throwErrorE TypeCheckError
+evalRandExp :: MonadProb m => Exp -> m RandVar
+evalRandExp (VarRef x)         = getAle x
+evalRandExp (Rand (DiscE x)) = Disc <$> evalExpDisc x
+evalRandExp (Rand (ContE x)) = Cont <$> evalExpCont x
+evalRandExp _ = throwErrorE TypeCheckError
 
 
 evalExpDisc :: MonadProb m => ExpDisc -> m VarDisc
-evalExpDisc (BinE n p) = do n' <- evalExpNum n >>= toInt
-                            p' <- evalExpNum p >>= toDouble
+evalExpDisc (BinE n p) = do n' <- evalNumExp n >>= toInt
+                            p' <- evalNumExp p 
                             return (Bin n' p')
 
-evalExpDisc (PoissE l) = do l' <- evalExpNum l >>= toDouble
+evalExpDisc (PoissE l) = do l' <- evalNumExp l 
                             return (Poiss l')
 
-evalExpDisc (GeoE p) = do p' <- evalExpNum p >>= toDouble
+evalExpDisc (GeoE p) = do p' <- evalNumExp p 
                           return (Geo p')
 
-evalExpDisc (PascE r p) = do r' <- evalExpNum r >>= toInt
-                             p' <- evalExpNum p >>= toDouble
+evalExpDisc (PascE r p) = do r' <- evalNumExp r >>= toInt
+                             p' <- evalNumExp p 
                              return (Pasc r' p')
 
-evalExpDisc (HiperE m r n) = do m' <- evalExpNum m >>= toInt
-                                r' <- evalExpNum r >>= toInt
-                                n' <- evalExpNum n >>= toInt
+evalExpDisc (HiperE m r n) = do m' <- evalNumExp m >>= toInt
+                                r' <- evalNumExp r >>= toInt
+                                n' <- evalNumExp n >>= toInt
                                 return (Hiper m' r' n')
 
-evalExpDisc (CustomE v p) = do v' <- evalExpVec v >>= V.mapM toInt
-                               p' <- evalExpVec p >>= V.mapM toDouble
+evalExpDisc (CustomE v p) = do v' <- evalVecExp v >>= V.mapM toInt
+                               p' <- evalVecExp p
                                return (Custom v' p')
 
 evalExpCont :: MonadProb m => ExpCont -> m VarCont
-evalExpCont (NormE m s) = do m' <- evalExpNum m >>= toDouble
-                             s' <- evalExpNum s >>= toDouble
+evalExpCont (NormE m s) = do m' <- evalNumExp m 
+                             s' <- evalNumExp s 
                              return (Norm m' s')
 
-evalExpCont (UnifE a b) = do a' <- evalExpNum a >>= toDouble
-                             b' <- evalExpNum b >>= toDouble
+evalExpCont (UnifE a b) = do a' <- evalNumExp a 
+                             b' <- evalNumExp b 
                              return (Unif a' b')
 
-evalExpCont (ExpoE a) = do a' <- evalExpNum a >>= toDouble
+evalExpCont (ExpoE a) = do a' <- evalNumExp a 
                            return (Expo a')
 
 
 
 
-evalExpNode :: MonadProb m => Exp -> m Node
-evalExpNode (Node l) = do
+evalNodeExp :: MonadProb m => NodeExp -> m NodeVal
+evalNodeExp (NE l) = do
   l' <- mapM (\(n,e) -> do
-                v <- evalExpNum e
-                d <- toDouble v
-                return (n, d)) l
+                v <- evalNumExp e
+                return (n, v)) l
   valNode (N l')
   return (N l')
-evalExpNode _ = throwErrorE InvalidVarType
 
 
-evalExpMk :: MonadProb m => Exp -> m Markov
-evalExpMk (MkE names) = do l <- mapM (\n -> do 
-                                          nd <- getNode n
-                                          return nd) names 
-                           valMk names l
-                           return (Mk (V.fromList names) (makeMatriz names l)) 
-evalExpMk _ = throwErrorE VarNotScoope                       
+evalPathExp :: MonadProb m => Exp -> m Path
+evalPathExp (VarRef x)            = getPath x
+evalPathExp (ConstCh x)           = return x
+evalPathExp (SimulFromName x m s) = do x' <- evalMarkovExp x 
+                                        valMkName x' m 
+                                        s' <- evalNumExp s >>= toInt
+                                        c  <- doSimulFromName x' m s'
+                                        return c  
+evalPathExp (SimulFromVec x v s)  = do x' <- evalMarkovExp x 
+                                        v' <- evalVecExp v 
+                                        valMkVector x' v'
+                                        s' <- evalNumExp s >>= toInt
+                                        c  <- doSimulFromVec x' v' s'
+                                        return c 
+evalPathExp _ = throwErrorE TypeCheckError
+
+evalMarkov :: MonadProb m => MarkovExp -> m Markov
+evalMarkov (MarkovE names) = let lnames = V.toList names in
+                             do nodes <- mapM getNode lnames
+                                valMarkov lnames nodes
+                                return (Mk names (makeMatriz lnames nodes))
 
 
 
+evalMarkovExp :: MonadProb m => Exp -> m Markov
+evalMarkovExp (VarRef n) = getMarkov n
+evalMarkovExp (Markov x) = evalMarkov x
+evalMarkovExp (NextDist x n) = do x' <- evalMarkovExp x 
+                                  n' <- evalNumExp n >>= toInt
+                                  let nam = getNames x' 
+                                      mat = getMatrix x' in 
+                                   return (Mk nam (matrixEx mat n'))
+evalMarkovExp _ = throwErrorE TypeCheckError
 -------------------------------
 -- Evaluador
 --------------------------------
 eval :: MonadProb m => Exp -> m Value
-eval (VarRef n)       = do s <- getDecls
+eval (VarRef n)    = do s <- getDecls
                         case M.lookup n s of
-                           (Just v) -> return v
-                           Nothing  -> throwErrorE TypeCheckError
-eval x@(ConstN {}) = VNum <$> evalExpNum  x
-eval x@(UMinus {}) = VNum <$> evalExpNum  x
-eval x@(OpNum  {}) = VNum <$> evalExpNum  x
-eval x@(Access {}) = VNum <$> evalExpNum  x
-eval x@(Mean    {}) = VNum <$> evalExpNum  x
-eval x@(Variance   {}) = VNum <$> evalExpNum  x
-eval x@(StdDev   {}) = VNum <$> evalExpNum  x
-eval x@(FDP    {}) = VNum <$> evalExpNum  x
-eval x@(MaxP   {}) = VNum <$> evalExpNum  x
-eval x@(MaxFDP {}) = VNum <$> evalExpNum  x
-eval x@(Prob    {}) = VNum <$> evalExpNum  x
-eval x@(ProbBetween  {}) = VNum <$> evalExpNum  x
-eval x@(Mode   {}) = VVec <$> evalExpVec  x
-eval x@(ConstV {}) = VVec <$> evalExpVec  x
-eval x@(Rand    {}) = VAle <$> evalExpAle  x
-eval x@(Node   {}) = VN   <$> evalExpNode x
-eval x@(MkE  {}) = VMk  <$> evalExpMk   x
+                             (Just v) -> return (fst v)
+                             Nothing  -> throwErrorE TypeCheckError
+eval x@(ConstN        {}) = VNum   <$> evalNumExp    x
+eval x@(UMinus        {}) = VNum   <$> evalNumExp    x
+eval x@(OpNum         {}) = VNum   <$> evalNumExp    x
+eval x@(Access        {}) = VNum   <$> evalNumExp    x
+eval x@(Mean          {}) = VNum   <$> evalNumExp    x
+eval x@(Variance      {}) = VNum   <$> evalNumExp    x
+eval x@(StdDev        {}) = VNum   <$> evalNumExp    x
+eval x@(FDP           {}) = VNum   <$> evalNumExp    x
+eval x@(MaxP          {}) = VNum   <$> evalNumExp    x
+eval x@(MaxFDP        {}) = VNum   <$> evalNumExp    x
+eval x@(Prob          {}) = VNum   <$> evalNumExp    x
+eval x@(ProbBetween   {}) = VNum   <$> evalNumExp    x
+eval x@(Mode          {}) = VVec   <$> evalVecExp    x
+eval x@(ConstV        {}) = VVec   <$> evalVecExp    x
+eval x@(Rand          {}) = VRand  <$> evalRandExp   x
+eval x@(ConstCh       {}) = VPath <$> evalPathExp  x
+eval x@(Markov        {}) = VMark  <$> evalMarkovExp x
+eval x@(ProbStep      {}) = VNum   <$> evalNumExp    x
+eval x@(ProbPath      {}) = VNum   <$> evalNumExp    x
+eval x@(ProbHit       {}) = VNum   <$> evalNumExp    x
+eval x@(NextDist      {}) = VMark  <$> evalMarkovExp x
+eval x@(Stationary    {}) = VVec   <$> evalVecExp    x
+eval x@(SimulFromName {}) = VPath <$> evalPathExp  x
+eval x@(SimulFromVec  {}) = VPath <$> evalPathExp  x

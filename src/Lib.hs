@@ -2,7 +2,7 @@ module Lib where
 
 import AST
 import Common
-
+import Matrix
 import qualified Data.Vector as V
 import Validator
 import CBin
@@ -139,11 +139,12 @@ getDesv :: RandVar -> Double
 getDesv (Disc x) = sqrt (getVariDisc x)
 getDesv (Cont x) = sqrt (getVariCont x)
 
+getMode :: RandVar -> Vec Double
+getMode (Disc x) = V.map fromIntegral (getModaDisc x)
+getMode (Cont x) = getModaCont x
 
 
-
-
-getModaDisc :: VarDisc -> Vec Int
+getModaDisc :: VarDisc -> Vec Int 
 getModaDisc (Bin n p) | p == 0    = V.singleton 0
                       | p == 1    = V.singleton n
                       | isInt t   = V.fromList [m - 1, m]
@@ -173,6 +174,61 @@ getModaDisc (Custom xs ps) = let maxP = V.maximum ps
 
 
 getModaCont :: VarCont -> Vec Double
-getModaCont (Norm  m u) = V.singleton m
+getModaCont (Norm  m _) = V.singleton m
 getModaCont (Expo  _) = V.singleton 0
-getModaCont _ = error "getModaCont"
+getModaCont (Unif _ _) = V.empty
+
+
+getMaxP :: RandVar ->  Double
+getMaxP (Disc x) = let v = getModaDisc x
+                       k = fromIntegral (V.head v)
+                       p = getProbDisc x Eq k
+                    in p
+getMaxP _ = error "Not definded"
+
+
+
+-------------------------------------
+-- Función de densidad de probabilidad y su punto máximo
+-------------------------------------
+------ FDP
+getFDP :: RandVar -> Double ->  Double
+getFDP (Cont (Norm m s)) x = (1 / (s * sqrt (2 * pi)) *
+                              exp (- ((x - m)^2) / (2 * s^2)))
+getFDP (Cont (Expo l)) x = if x < 0 then
+                              0 else (l * exp (-l * x))
+getFDP (Cont (Unif a b)) x = if x < a || x > b
+                             then  0 else
+                             (1 / (b - a))
+getFDP (Disc _) _ = error "Not definded"
+------ MaxFDP 
+
+getMaxFDP :: RandVar ->  Double
+getMaxFDP x@(Cont (Norm m _)) = getFDP x m
+getMaxFDP x@(Cont (Expo _))   = getFDP x 0
+getMaxFDP x@(Cont (Unif a _)) = getFDP x a
+getMaxFDP (Disc _) = error "Not Definded"
+
+
+
+
+getNames :: Markov -> Path
+getNames (Mk n _) = n 
+
+getMatrix :: Markov -> Matrix Double
+getMatrix (Mk _ m) = m
+
+
+
+getProbSteps :: Markov -> Name -> Name -> Int -> Double
+getProbSteps (Mk names ma) n m k = let i = indexOf names n
+                                       j = indexOf names m
+                                       mat = matrixEx ma k
+                                    in getElem mat i j 
+
+
+
+getProbPath :: Markov -> Path -> Double
+getProbPath (Mk names mat) c =
+  let idxs = V.toList $ V.map (\x -> indexOf names x) c
+  in product [ getElem mat i j | (i,j) <- zip idxs (tail idxs) ]

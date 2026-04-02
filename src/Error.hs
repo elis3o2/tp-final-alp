@@ -38,10 +38,10 @@ data TError =
   | VecExpExpected
   | RandExpExpected
   | NumExpExpected
-  | ChainExpExpected
+  | PathExpExpected
   | VarNotScoope
   | InvalidVarType
-  | EmptyChain
+  | EmptyPath
   | MkExpExpected
 
 
@@ -64,6 +64,6 @@ instance Show TError where
   show NumExpExpected   = "Numeric expression was expected"
   show VecExpExpected   = "Vector expression was expected"
   show RandExpExpected  = "Random expression was expected"
-  show ChainExpExpected = "Chain expression was expected"
-  show EmptyChain       = "Chains can´t be empyt"
+  show PathExpExpected = "Path expression was expected"
+  show EmptyPath       = "Paths can´t be empyt"
   show MkExpExpected    = "Markov Expression was expected"

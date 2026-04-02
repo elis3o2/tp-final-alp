@@ -4,7 +4,7 @@ import qualified Data.Map as M
 import Common
 
 
-data Env = Env {decls::M.Map Name Value, ndes::M.Map Name Node}
+data Env = Env {decls::M.Map Name (Value, Type), ndes::M.Map Name NodeVal}
 
 -- | Valor del estado inicial
 initialEnv :: Env

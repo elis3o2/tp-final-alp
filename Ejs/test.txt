@@ -1,5 +1,14 @@
-A -> [(B,0.3), (C, 0.7)]
-B -> [(A,0.6), (C, 0.4)]
-C -> [(B,0.5), (D, 0.5)]
+a = 1
+b = 2
+c = 3
+x = (a, b, c)
 
-X = mk(A, B, C)
+uno -> [(uno, 1 )]
+dos -> [(uno, 1 )]
+tres -> [(uno, 1 )]
+y = [uno, uno, uno]
+
+X = mk(uno, dos, cinco)
+
+print (F (X,y))
+print(y)

@@ -19,10 +19,16 @@ import Prettyprinter
   , line
   , sep
   , punctuate
+  , tupled
   , defaultLayoutOptions
   , layoutSmart
+  , comma
+  , hsep
+  , vsep
+  , indent
   )
-import Prettyprinter.Render.Terminal( renderStrict,bold, color, colorDull, Color(..), AnsiStyle )
+import Prettyprinter.Render.Terminal( renderStrict,bold, color, colorDull, Color(..), AnsiStyle,  )
+import Control.Exception (bracket)
 
 formatDouble :: Double -> String
 formatDouble x = showFFloat (Just 24) x ""
@@ -47,15 +53,14 @@ randomColor = annotate (color Magenta)
 functionColor :: Doc AnsiStyle -> Doc AnsiStyle
 functionColor = annotate (color Red <> bold)
 
+nameColor :: Doc AnsiStyle -> Doc AnsiStyle
+nameColor = annotate (color Cyan)
 
 parenIf :: Bool -> Doc a -> Doc a
 parenIf True  = parens
 parenIf False = id
 
--- NumC
-numC2Doc :: NumC -> Doc AnsiStyle
-numC2Doc (I n) = numColor (pretty n)
-numC2Doc (D n) = numColor (pretty n)
+
 
 int2Doc :: Int -> Doc AnsiStyle
 int2Doc n = numColor (pretty n)
@@ -186,18 +191,40 @@ expAle2Doc (ContE x)  = expCont2Doc x
 
 
 
+vec2Doc :: Vec Double -> Doc AnsiStyle
+vec2Doc = tupled . map double2Doc . V.toList
 
+Path2Doc :: Path -> Doc AnsiStyle
+Path2Doc = brackets . hsep . punctuate comma . map (nameColor . pretty) . V.toList
 
+markov2Doc :: Markov -> Doc AnsiStyle
+markov2Doc (Mk names mat) = vsep (header : rows)
+          where
+            ns = V.toList names
+            ms = V.toList mat
+            -- Header (nombres de columnas)
+            header = indent 4 $ hsep (map (nameColor . pretty) ns)
+            -- Filas
+            rows = zipWith rowDoc ns ms
+            rowDoc name row = hsep [ nameColor (pretty name) , vec row]
+            vec = brackets. hsep . punctuate comma . map double2Doc. V.toList
+            
 
 ppValue ::  Value -> String
-ppValue (VAle x) = render (varAle2Doc x)
-ppValue (VNum x) = render (numC2Doc x)
-ppValue (VVec x) = render (parens $ sep $ punctuate (pretty ",") (map numC2Doc (V.toList x)))
+ppValue (VRand x) = render (varAle2Doc x)
+ppValue (VNum x) = render (double2Doc x)
+ppValue (VVec x) = render (vec2Doc x)
+ppValue (VMark x) = render (markov2Doc x)
+ppValue (VPath x) = render (Path2Doc x)
+
+
+
+
 
 
 
 prettyExp :: Exp -> Doc AnsiStyle
-prettyExp (ConstN i) = numC2Doc i
+prettyExp (ConstN i) = double2Doc i
 prettyExp (VarRef x)    = varColor (pretty x)
 prettyExp (UMinus n) = pretty "-" <> maybeParenN n
 prettyExp (OpNum Plus  a b) = prettyExp a <+> opBin2Doc Plus <+> prettyExp b
@@ -225,9 +252,14 @@ prettyExp (ProbBetween x op1 n op2 m) = functionColor (pretty "P") <> parens (
 prettyExp (ConstV v) = parens $ sep $ punctuate (pretty ",") (map prettyExp (V.toList v))
 prettyExp (Mode x) = functionColor (pretty "moda") <+> prettyExp x
 prettyExp (Rand x) = expAle2Doc x
-
-
-
+prettyExp (ConstCh x) = Path2Doc x 
+prettyExp (Markov (MarkovE x)) = functionColor (pretty "mk") <+> Path2Doc x 
+prettyExp (ProbStep x i j n) = functionColor (pretty "F")<+> prettyExp n <> parens (prettyExp x <+> 
+                                                          nameColor (pretty i) <+>
+                                                          nameColor (pretty j))
+-- prettyExp (ProbPath x c) = functionColor (prettyExp "F")<> parens (prettyExp x <+> 
+--                                                           nameColor (pretty i) <+>
+--                                                           nameColor (pretty j))
 
 
 

@@ -87,13 +87,13 @@ buildProbsR x@(Disc (Custom xs _)) i f | i > f = throwErrorE ProbInvalidForm
                                           where
                                             list = V.toList (V.filter (\a-> a < i || a > f) xs)
                                             buildRow k = do
-                                              p <- getProb x Eq (I k)
+                                              p <- getProb x Eq k
                                               return [show k, formatDouble p]
 buildProbsR x@(Disc _) i f | i > f = throwErrorE ProbInvalidForm
                            | otherwise = mapM buildRow [i .. f]
                              where
                                 buildRow k = do
-                                  p <- getProb x Eq (I k)
+                                  p <- getProb x Eq k
                                   return [show k, formatDouble p]
 buildProbsR _  _ _= throwErrorE InvalidProb
 
@@ -101,15 +101,15 @@ buildProbsR _  _ _= throwErrorE InvalidProb
 
 
 makeTableR :: MonadProb m => Value -> Value -> Value -> m String
-makeTableR (VAle v) (VNum x) (VNum y) = do x' <- toInt x
-                                           y' <- toInt y
-                                           probs <- buildProbsR v x' y'
-                                           return (renderTable  ["X", "P(X)"] probs)
+makeTableR (VRand v) (VNum x) (VNum y) = do x' <- toInt x
+                                            y' <- toInt y
+                                            probs <- buildProbsR v x' y'
+                                            return (renderTable  ["X", "P(X)"] probs)
 makeTableR _ _ _ = throwErrorE InvalidProb
 
 
 makeTable :: MonadProb m => Value -> m String 
-makeTable (VAle (Disc v)) = return (renderTable ["X", "P(X)"] (buildProbs v))
+makeTable (VRand (Disc v)) = return (renderTable ["X", "P(X)"] (buildProbs v))
 makeTable _ = throwErrorE InvalidProb 
 
 

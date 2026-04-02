@@ -29,6 +29,7 @@ import TypeChecker
 import Debug.Trace
 import Monad (MonadProb, ProbM, runProbM)
 import Table
+import Data.Bits (Bits(xor))
 
 -- | Parser de banderas
 parseMode :: Parser Bool
@@ -73,6 +74,7 @@ loadFile f = do
 compileFile ::  MonadProb m => FilePath -> m ()
 compileFile f = do
     comms <- loadFile f
+    liftIO (print comms)
     mapM_ checkComm comms
     mapM_ handleComm comms
 
@@ -86,10 +88,10 @@ parseIO filename p x =
 
 handleComm :: MonadProb m => Comm -> m ()
 handleComm (Let x e) = do v <- eval e
-                          add x v
+                          updateDecl x v
 handleComm (Print e) = do _ <- liftIO (print e)
                           v <- eval e
-                          liftIO $ putStrLn (ppValue v)
+                          liftIO $ print v
 handleComm (Table x)= do x' <- eval x
                          t <- makeTable x'
                          liftIO $ putStrLn t
@@ -100,7 +102,8 @@ handleComm (TableR x n m) = do x' <- eval x
                                liftIO $ putStrLn t
 handleComm (Plot x) = do x' <- eval x 
                          case x' of
-                          VAle (Disc v) -> liftIO (plotDisc v) 
-                          VAle (Cont v) -> liftIO (plotCont v)
+                          VRand (Disc v) -> liftIO (plotDisc v) 
+                          VRand (Cont v) -> liftIO (plotCont v)
                           _ -> return () 
-
+handleComm (LetN x e) = do e' <- evalNodeExp e 
+                           addNode x e'

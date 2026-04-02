@@ -8,6 +8,7 @@ import qualified Data.Vector as V
 import Control.Monad (when)
 import Control.Monad.Except
 import GHC.Real (reduce)
+import Control.Monad.Trans.Except (throwE)
 
 -------------------------
 --- Validate de NumC
@@ -19,20 +20,12 @@ isInt x = x == fromIntegral (round x :: Int)
       && x <= fromIntegral (maxBound :: Int)
 
 
-toInt :: MonadProb m => NumC -> m Int
-toInt (I n) = return n
-toInt (D n) | isInt n   = return (round n)
-            | otherwise = throwErrorE IntValueExpected
-
-toDouble :: MonadProb m => NumC -> m Double
-toDouble (I n) = return (fromIntegral n)
-toDouble (D n) = return n
+toInt :: MonadProb m => Double -> m Int
+toInt n | isInt n   = return (round n)
+        | otherwise = throwErrorE IntValueExpected
 
 
-tryToInt :: NumC -> NumC
-tryToInt (D n) | isInt n   = I (round n)
-               | otherwise = D n
-tryToInt x = x
+
 
 --------------------------------
 -- Validator de probabilidades
@@ -118,7 +111,7 @@ valVarCont (Expo a) | a < 0 = throwErrorE AleInvalidForm
 
 
 
-valNode :: MonadProb m => Node -> m ()
+valNode :: MonadProb m => NodeVal -> m ()
 valNode (N nd) = view nd 0 []
               where inn _ []   = False 
                     inn m (a:as)| m == a = True
@@ -129,17 +122,33 @@ valNode (N nd) = view nd 0 []
                                              | inn n names    = throwErrorE InvalidIndex
                                              | otherwise      = view s (sm + p) (n:names)
  
-valMk :: MonadProb m => [Name] -> [Node] -> m ()
-valMk names nodes = mapM_ (valNod valName) nodes
+valMarkov :: MonadProb m => [Name] -> [NodeVal] -> m ()
+valMarkov names nodes = mapM_ (valNod valName) nodes
                               where
                                     valName n validNam  | n `elem` validNam = return ()
                                                         | otherwise         = throwErrorE InvalidIndex
                                     valNod f (N pairs) = mapM_ (\(n, _) -> f n names) pairs
 
+valMkName :: MonadProb m => Markov -> Name -> m ()
+valMkName (Mk names _) n | V.elem n names = return ()
+                         | otherwise      = throwErrorE InvalidIndex
 
 
+valMkPath :: MonadProb m => Markov -> Path -> m ()
+valMkPath x n | V.length n < 2 = throwErrorE InvalidIndex
+               | otherwise = do _ <- V.mapM (\name -> valMkName x name) n
+                                return ()
+                               
 
-makeMatriz' :: [Name] -> [Node] -> [[Double]]
+
+valMkVector :: MonadProb m => Markov -> Vec Double -> m ()
+valMkVector (Mk n _) v | V.length n /= V.length v = throwErrorE InvalidIndex
+                       | V.any (\p -> p < 0 || p > 1) v = throwErrorE InvalidProb
+                       | V.sum v /= 1 = throwErrorE InvalidProb
+                       | otherwise = return ()
+
+
+makeMatriz' :: [Name] -> [NodeVal] -> [[Double]]
 makeMatriz' _ [] = []
 makeMatriz' names (N n:nodes) = makerow names n : makeMatriz' names nodes
                               where
@@ -150,5 +159,5 @@ makeMatriz' names (N n:nodes) = makerow names n : makeMatriz' names nodes
                                 makerow (m:ms) node = value m node : makerow ms node
 
 
-makeMatriz :: [Name] -> [Node] -> Matrix Double
+makeMatriz :: [Name] -> [NodeVal] -> Matrix Double
 makeMatriz names nodes = V.fromList (map V.fromList (makeMatriz' names nodes))

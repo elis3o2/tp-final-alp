@@ -78,7 +78,8 @@ library
                       prettyprinter,
                       prettyprinter-ansi-terminal,
                       boxes,
-                      easyplot
+                      easyplot,
+                      random
     -- Directories containing source files.
     hs-source-dirs:   src
 
@@ -96,6 +97,8 @@ library
                       Validator
                       Table
                       Lib
+                      Matrix
+                      Random
     -- Base language which the package is written in.
     default-language: Haskell2010
 
