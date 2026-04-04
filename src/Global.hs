@@ -12,8 +12,9 @@ initialEnv = Env M.empty M.empty
 
 
 data Conf = Conf {
-    verbose :: Bool   -- si se muestra información extra
+    verbose  :: Bool,
+    decimals :: Int
 }
 
 defaultConf :: Conf 
-defaultConf = Conf {verbose=True}
+defaultConf = Conf {verbose=True, decimals=6}

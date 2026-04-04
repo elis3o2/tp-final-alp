@@ -11,8 +11,6 @@ import Error
 import Control.Monad.Reader
 import Control.Monad.State
 import Control.Monad.Except
-import PPrint
-import Control.Monad.IO.Class
 import qualified Data.Map as M
 import Prettyprinter(Doc, Pretty (pretty))
 import Prettyprinter.Render.Terminal
@@ -39,6 +37,14 @@ instance MonadProb ProbM where
   getRandom = liftIO (randomRIO (0.0, 1.0))
 
 
+throwErrorE :: MonadProb m => EError -> m a
+throwErrorE e = throwError (ExecErr e)
+
+
+throwErrorT :: MonadProb m => TError -> m a
+throwErrorT e = throwError (TypeErr e)
+
+
 getDecls :: MonadProb m => m (M.Map Name (Value,Type))
 getDecls = do e <- get
               case e of 
@@ -58,9 +64,9 @@ getNode n = do s <- getNodes
 
 
 
-getNumC :: MonadProb m => Name -> m Double
-getNumC n = do s <- getDecls
-               case M.lookup n s of
+getNum :: MonadProb m => Name -> m Double
+getNum n = do s <- getDecls
+              case M.lookup n s of
                 Just (VNum e, _) -> return e
                 _             -> throwErrorE TypeCheckError
 
@@ -70,34 +76,25 @@ getVec n = do s <- getDecls
                 Just (VVec e, _) -> return e
                 _             -> throwErrorE TypeCheckError
 
-getAle :: MonadProb m => Name -> m RandVar
-getAle n = do s <- getDecls
-              case M.lookup n s of
-                Just (VRand e, _) -> return e
-                _             -> throwErrorE TypeCheckError
+getRand :: MonadProb m => Name -> m RandVar
+getRand n = do s <- getDecls
+               case M.lookup n s of
+                 Just (VRand e, _) -> return e
+                 _             -> throwErrorE TypeCheckError
 
 
 getPath :: MonadProb m => Name -> m Path
 getPath n = do s <- getDecls
-                case M.lookup n s of
-                 Just (VPath e, _) -> return e
-                 _             -> throwErrorE TypeCheckError
-
+               case M.lookup n s of
+                  Just (VPath e, _) -> return e
+                  _                 -> throwErrorE TypeCheckError
+ 
 
 getMarkov :: MonadProb m => Name -> m Markov
 getMarkov n = do s <- getDecls
                  case M.lookup n s of
                   Just (VMark e, _) -> return e
                   _             -> throwErrorE TypeCheckError
-
-
-
-
-
-tellIfVerbose :: MonadProb m => Trace -> m ()
-tellIfVerbose msg = do
-  v <- asks verbose
-  when v (tell [msg])
 
 
 
@@ -124,12 +121,6 @@ addNodeDummy x = do
 
 
 
-throwErrorE :: MonadProb m => EError -> m a
-throwErrorE e = throwError (ExecErr e)
-
-throwErrorT :: MonadProb m => TError -> m a
-throwErrorT e = throwError (TypeErr e)
-
 lookRand :: MonadProb m => Name  -> m ()
 lookRand n = do d <- getDecls
                 case M.lookup n d of 
@@ -152,10 +143,19 @@ lookNodes :: MonadProb m => Path -> m ()
 lookNodes c = do _ <- V.mapM getNode c
                  return ()
 
-runProbM :: ProbM a -> Conf -> Env -> IO (Either Error (a, Env), [Trace])
-runProbM c conf env =
-  runWriterT $ runExceptT $ runStateT (runReaderT c conf) env
+
+
+
+tellIfVerbose :: MonadProb m => Trace -> m ()
+tellIfVerbose msg = do v <- asks verbose
+                       when v (tell [msg])
+
 
 
 printP :: (MonadProb m, Show a) => a -> m ()
 printP x = liftIO (print x)
+
+
+runProbM :: ProbM a -> Conf -> Env -> IO (Either Error (a, Env), [Trace])
+runProbM c conf env =
+  runWriterT $ runExceptT $ runStateT (runReaderT c conf) env

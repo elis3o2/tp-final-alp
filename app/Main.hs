@@ -29,16 +29,23 @@ import TypeChecker
 import Debug.Trace
 import Monad (MonadProb, ProbM, runProbM)
 import Table
-import Data.Bits (Bits(xor))
-
+import Prettyprinter.Render.Terminal (putDoc)
+import Plot
+import Control.Monad.Reader (asks)
 -- | Parser de banderas
 parseMode :: Parser Bool
 parseMode =
   switch (long "verbose" <> short 'v' <> help "Modo verbose")
 
+parseDecimals :: Parser Int
+parseDecimals =
+  option auto
+    ( long "decimals" <> short 'd' <> metavar "INT" <> help "Cantidad de decimales a mostrar"
+   <> value 6 <> showDefault)
+
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
-parseArgs :: Parser (Bool, [FilePath])
-parseArgs = (\a b -> (a,b)) <$> parseMode <*> many (argument str (metavar "FILES..."))
+parseArgs :: Parser (Bool, Int, [FilePath])
+parseArgs = (,,) <$> parseMode <*> parseDecimals<*> many (argument str (metavar "FILES..."))
 
 main :: IO ()
 main = execParser opts >>= go
@@ -48,9 +55,9 @@ main = execParser opts >>= go
      <> progDesc "Compilador de FD4"
      <> header "Compilador de FD4 de la materia Compiladores 2025" )
 
-    go :: (Bool,[FilePath]) -> IO ()
-    go (opt, files) =
-              runOrFail (Conf opt) $ mapM_ compileFile files
+
+go :: (Bool, Int, [FilePath]) -> IO ()
+go (opt, decs, files) = runOrFail (Conf opt decs) $ mapM_ compileFile files
 
 
 runOrFail :: Conf -> ProbM a -> IO a
@@ -89,9 +96,9 @@ parseIO filename p x =
 handleComm :: MonadProb m => Comm -> m ()
 handleComm (Let x e) = do v <- eval e
                           updateDecl x v
-handleComm (Print e) = do _ <- liftIO (print e)
-                          v <- eval e
-                          liftIO $ print v
+handleComm (Print e) = do v <- eval e
+                          d <- asks decimals
+                          liftIO $ putDoc (ppValue (PPConf d) v)
 handleComm (Table x)= do x' <- eval x
                          t <- makeTable x'
                          liftIO $ putStrLn t
@@ -102,8 +109,8 @@ handleComm (TableR x n m) = do x' <- eval x
                                liftIO $ putStrLn t
 handleComm (Plot x) = do x' <- eval x 
                          case x' of
-                          VRand (Disc v) -> liftIO (plotDisc v) 
-                          VRand (Cont v) -> liftIO (plotCont v)
+                          VRand v -> liftIO (plotRand v) 
+                          VMark v -> liftIO (plotMarkov v)
                           _ -> return () 
 handleComm (LetN x e) = do e' <- evalNodeExp e 
                            addNode x e'

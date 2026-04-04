@@ -23,11 +23,15 @@ data EError
   = DivByZero
   | NotDefined
   | IntValueExpected
-  | AleInvalidForm
+  | RandInvalidForm
   | ProbInvalidForm
   | InvalidProb
   | InvalidIndex
   | TypeCheckError
+  | InvalidRanges
+  | InvalidSteps
+  | InvalidName
+  | InvalidVector
 
   deriving (Eq)
 
@@ -50,12 +54,14 @@ instance Show EError where
   show NotDefined       = "Function not defined"
   show IntValueExpected = "Int value was expected"
   show ProbInvalidForm  = "Ranges at probability function not valid"
-  show AleInvalidForm   = "Random Variable form not valid"
+  show RandInvalidForm  = "Random Variable form not valid"
   show InvalidProb      = "Probability not valid"
+  show InvalidRanges    = "Probability functions not in valid range"
   show InvalidIndex     = "Index not valid"
   show TypeCheckError   = "Something went wrong with the TypeChecker"
-
-
+  show InvalidSteps     = "Number of steps is not valid"
+  show InvalidName      = "Name is not part of the Markov Chain"  
+  show InvalidVector    = "Vector provided is not valid"
 instance Show TError where
   show InvalidVarType   = "Variable type not adimited"
   show VarNotScoope     = "Variable not in scoope"

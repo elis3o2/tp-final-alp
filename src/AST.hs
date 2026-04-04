@@ -4,24 +4,6 @@ module AST where
 import Common
 
 
--- valores
-data VarDisc =
-    Bin Int Double
-  | Poiss Double
-  | Geo Double
-  | Pasc Int Double
-  | Hiper Int Int Int
-  | Custom (Vec Int) (Vec Double)
-
-  deriving (Show, Eq)
-
-data VarCont = Norm Double Double
-             | Unif Double Double
-             | Expo Double
-
-  deriving (Show, Eq)
-
-
 -- expresiones
 data ExpDisc =
     BinE Exp Exp
@@ -41,13 +23,10 @@ data ExpCont = NormE Exp Exp
 
 
 data RandExp = ContE ExpCont | DiscE ExpDisc deriving (Show, Eq)
-data RandVar = Cont  VarCont | Disc  VarDisc deriving (Show, Eq)
 
 
-data NodeVal = N [(Name, Double)]    deriving (Show, Eq)
 data NodeExp = NE [(Name, Exp)]    deriving (Show, Eq)
 
-data Markov = Mk (Vec Name) (Matrix Double)   deriving (Show, Eq)
 
 data MarkovExp = MarkovE Path    deriving (Show, Eq)
 
@@ -64,9 +43,9 @@ data Exp
   | Variance Exp -- RandExp -> Double
   | StdDev Exp   -- RandExp -> Double
   | Mode  Exp    -- RandExp -> Vec (Double)
-  | FDP Exp Exp  -- ContExp -> Double
+  | PDF Exp Exp  -- ContExp -> Double
   | MaxP Exp     -- DiscExp -> Double
-  | MaxFDP Exp   -- DiscExp -> Double
+  | MaxPDF Exp   -- DiscExp -> Double
 
   -- probabilidades
   | Prob Exp OpComp Exp                    -- RandExp -> OpComp -> NumExp --> Double
@@ -111,7 +90,7 @@ instance Show Value where
   show (VRand  x) = show x  
   show (VMark  m) = show m
   show (VNode  n) = show n
-  show (VPath c) = show c
+  show (VPath c)  = show c
   show Dummy      = show "Dummy"
 
 

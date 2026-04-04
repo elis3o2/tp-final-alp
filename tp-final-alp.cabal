@@ -79,7 +79,9 @@ library
                       prettyprinter-ansi-terminal,
                       boxes,
                       easyplot,
-                      random
+                      random,
+                      gnuplot,
+                      graphviz
     -- Directories containing source files.
     hs-source-dirs:   src
 
@@ -96,9 +98,11 @@ library
                       PPrint
                       Validator
                       Table
-                      Lib
+                      Distribution
+                      Markov
                       Matrix
-                      Random
+                      Simulation
+                      Plot
     -- Base language which the package is written in.
     default-language: Haskell2010
 
@@ -124,7 +128,9 @@ executable tp-final-alp
         tp-final-alp,
         optparse-applicative,
         parsec,
-        mtl
+        mtl,
+        prettyprinter,
+        prettyprinter-ansi-terminal,
 
     -- Directories containing source files.
     hs-source-dirs:   app

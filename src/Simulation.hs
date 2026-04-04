@@ -1,6 +1,5 @@
-module Random where
+module Simulation where
 
-import AST 
 import Common
 import Monad
 import qualified Data.Vector as V

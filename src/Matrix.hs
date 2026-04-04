@@ -1,29 +1,7 @@
 module Matrix where 
 
 import Common
-import AST 
 import qualified Data.Vector as V
-
-
-
-dot :: Vec Double -> Vec Double -> Double
-dot v1 v2 = V.sum (V.zipWith (*) v1 v2)
-
-
-
-matrixMul :: Matrix Double -> Matrix Double -> Matrix Double
-matrixMul a b =
-  let colsB = transpose b
-  in V.map (\rowA -> V.map (\colB -> dot rowA colB) colsB) a
-
-
-
-matrixEx :: Matrix Double -> Int -> Matrix Double 
-matrixEx m 0 = identity (V.length m)
-matrixEx m n | even n    = matrixEx (matrixMul m m) (n `div` 2)
-             | otherwise = matrixMul m (matrixEx m (n-1))
-
-
 
 
 getElem :: Matrix a -> Int -> Int -> a
@@ -39,9 +17,25 @@ transpose m = let cols = V.length (m V.! 0)
                in V.generate cols (getCol m)
 
 
+dot :: Vec Double -> Vec Double -> Double
+dot v1 v2 = V.sum (V.zipWith (*) v1 v2)
+
 
 identity :: Int -> Matrix Double
 identity n = V.generate n $ \i -> V.generate n $ \j -> if i == j then 1 else 0
+
+
+matrixMul :: Matrix Double -> Matrix Double -> Matrix Double
+matrixMul a b =
+  let colsB = transpose b
+  in V.map (\rowA -> V.map (\colB -> dot rowA colB) colsB) a
+
+
+matrixEx :: Matrix Double -> Int -> Matrix Double 
+matrixEx m 0 = identity (V.length m)
+matrixEx m n | even n    = matrixEx (matrixMul m m) (n `div` 2)
+             | otherwise = matrixMul m (matrixEx m (n-1))
+
 
 
 subMatrix :: Matrix Double -> Matrix Double -> Matrix Double
@@ -58,20 +52,6 @@ zeroVec n = V.replicate n 0
 
 unitVec :: Int -> Int -> Vec Double
 unitVec n j = V.generate n (\i -> if i == j then 1 else 0)
-
-
-
-buildSystem :: Matrix Double -> Int  -> (Matrix Double, Vec Double)
-buildSystem p target =
-  let n  = V.length p
-      iM = identity n
-      a0 = subMatrix iM p
-
-      -- fila target = [0..0,1,0..]
-      targetRow = V.generate n (\j -> if j == target then 1 else 0)
-      a = replaceRow target targetRow a0
-      b = unitVec n target
-  in (a, b)
 
 
 gaussJordan :: Matrix Double -> Vec Double -> Vec Double
@@ -92,12 +72,9 @@ eliminate mat k =
 
       rowK = V.map (/ pivot) (mat' V.! k)
 
-      updateRow i row
-        | i == k = rowK
-        | otherwise =
-            let factor = row V.! k
-            in V.zipWith (-) row (V.map (* factor) rowK)
-
+      updateRow i row | i == k = rowK
+                      | otherwise = let factor = row V.! k
+                                    in V.zipWith (-) row (V.map (* factor) rowK)
   in V.imap updateRow mat'
 
 swapRows :: Int -> Int -> Matrix Double -> Matrix Double
@@ -114,21 +91,6 @@ argMaxAbs k n mat =
      ) k indices
 
 
-
-getProbHit :: Markov -> Name -> Name -> Double
-getProbHit (Mk names mat) from to =
-  let target = indexOf names to
-      start  = indexOf names from
-
-      (a, b) = buildSystem mat target
-      h      = gaussJordan a b
-
-  in h V.! start
-
-
-
-
-
 buildStationarySystem :: Matrix Double -> (Matrix Double, Vec Double)
 buildStationarySystem p =
   let n  = V.length p
@@ -137,17 +99,21 @@ buildStationarySystem p =
 
       a0 = subMatrix pt iM
 
-      -- reemplazo última fila por suma = 1
       onesRow = V.replicate n 1
       a = replaceRow (n-1) onesRow a0
-
       b = V.generate n (\i -> if i == n-1 then 1 else 0)
 
   in (a, b)
 
 
-getStationary :: Markov -> Vec Double
-getStationary (Mk _ m ) = let (a, b) = buildStationarySystem m 
-                          in gaussJordan a b
 
+buildSystem :: Matrix Double -> Int  -> (Matrix Double, Vec Double)
+buildSystem p target =
+  let n  = V.length p
+      iM = identity n
+      a0 = subMatrix iM p
 
+      targetRow = V.generate n (\j -> if j == target then 1 else 0)
+      a = replaceRow target targetRow a0
+      b = unitVec n target
+  in (a, b)
