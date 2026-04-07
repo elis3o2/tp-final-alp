@@ -4,8 +4,6 @@ module Parse where
 
 import AST
 import Common
-import Distribution
-import Markov
 
 import Prelude hiding ( const )
 import Text.Parsec hiding (runP,parse)
@@ -14,7 +12,6 @@ import qualified Text.Parsec.Token as Tok
 import Text.ParserCombinators.Parsec.Language --( GenLanguageDef(..), emptyDef )
 import Data.Char (isUpper, isLower)
 import qualified Data.Vector as V
-import Eval (evalPathExp)
 
 type P = Parsec String ()
 
@@ -25,12 +22,12 @@ reservedNamesList :: [String]
 reservedNamesList =
   [ "Bin", "Binomial"
   , "Poi", "Poisson"
-  , "Geo", "Geometrica"
+  , "Geo", "Geometric"
   , "BN", "Pascal"
-  , "HG", "Hipergeometrica"
+  , "HG", "Hipergeometric"
   , "N", "Normal"
-  , "Exp", "Exponencial"
-  , "Unif", "Uniforme"
+  , "Exp", "Exponential"
+  , "Unif", "Uniform"
   , "P", "E", "SD", "V", "pdf", "F"
   , "mode", "maxP", "maxPDF"
   , "mk", "print", "table", "plot"
@@ -219,7 +216,7 @@ parsePoiss = do try (reserved "Poi")
                                                   
 parseGeo :: P RandExp                             
 parseGeo = do try (reserved "Geo")                
-                <|> reserved "Geometrica"         
+                <|> reserved "Geometric"         
               parens $ do                         
                   p <- parseNumExp                
                   return (DiscE (GeoE p))         
@@ -235,7 +232,7 @@ parsePasc = do try (reserved "BN")
                                                   
 parseHiper :: P RandExp                           
 parseHiper = do try (reserved "HG")               
-                  <|> reserved "Hipergeometrica"  
+                  <|> reserved "Hipergeometric"  
                 parens $ do                       
                     n <- parseNumExp              
                     reservedOp ","                
@@ -269,14 +266,14 @@ parseNorm = do try (reserved "N")
                                                   
 parseExpo :: P RandExp                            
 parseExpo = do try (reserved "Exp")               
-                <|> reserved "Exponencial"        
+                <|> reserved "Exponential"        
                parens $ do                        
                   a <- parseNumExp                
                   return (ContE (ExpoE a))        
                                                   
 parseUnif :: P RandExp                            
 parseUnif = do try (reserved "Unif")              
-                <|> reserved "Uniforme"           
+                <|> reserved "Uniform"           
                parens $ do                        
                   a <- parseNumExp                
                   reservedOp ","                  
@@ -330,7 +327,7 @@ parseNumStat :: P Exp
 parseNumStat = try parseMean                
            <|> try parseVariance            
            <|> try parseStdDev              
-           <|> try parseFdp                 
+           <|> try parsePDF                 
            <|> try parseMaxP                
            <|> parseMaxPDF                  
                                         
@@ -355,8 +352,8 @@ parseStdDev = do reserved "SD"
                  v <- parens parseRandExp   
                  return (StdDev v)          
                                         
-parseFdp :: P Exp                           
-parseFdp = do reserved "pdf"                
+parsePDF :: P Exp                           
+parsePDF = do reserved "pdf"                
               parens $ do                   
                 v <- parseRandExp           
                 reservedOp ","              
@@ -407,7 +404,7 @@ parseProbRand = try parsePOpBt <|> parsePOp
                                                     
 parsePOp :: P Exp                                   
 parsePOp = try (do n <- parseNumExp                 
-                   op <- parseOpositte              
+                   op <- parseOpposite              
                    v <- parseRandExp                
                    return (Prob v op n))            
       <|> do v <- parseRandExp                      
@@ -417,7 +414,7 @@ parsePOp = try (do n <- parseNumExp
                                                     
 parsePOpBt :: P Exp                                 
 parsePOpBt = do n <- parseNumExp                    
-                op1 <- parseOpositte                
+                op1 <- parseOpposite                
                 v <- parseRandExp                   
                 op2 <- parseOp                      
                 m <- parseNumExp                    
@@ -433,8 +430,8 @@ parseOp = try (reservedOp "<=" >> return Lte)
       <|> try (reservedOp "/=" >> return NEq)       
       <|> (reservedOp "=" >> return Eq)             
                                                     
-parseOpositte :: P OpComp                           
-parseOpositte = try (reservedOp "<=" >> return Gte) 
+parseOpposite :: P OpComp                           
+parseOpposite = try (reservedOp "<=" >> return Gte) 
       <|> try (reservedOp "<"  >> return Gt)        
       <|> try (reservedOp ">=" >> return Lte)       
       <|> try (reservedOp ">"  >> return Lt)        
@@ -452,16 +449,15 @@ parseProbMk = try parseProbStep <|>
               try parseProbPath <|>                 
               parseProbHit                          
                                                     
-parseProbStep :: P Exp                              
-parseProbStep = do n <- parseNumExp                 
-                   parens $ do                      
-                    x <- parseMarkovExp             
-                    reservedOp ","                  
-                    i <- identifier                 
-                    reservedOp ","                  
-                    j <-identifier                  
-                    reservedOp ","                  
-                    return (ProbStep x i j n)       
+parseProbStep :: P Exp
+parseProbStep = do n <- parseNumExp
+                   parens $ do
+                     x <- parseMarkovExp
+                     reservedOp ","
+                     i <- identifier
+                     reservedOp ","
+                     j <- identifier
+                     return (ProbStep x i j n)   
                                                     
 parseProbPath :: P Exp                              
 parseProbPath = do parens $ do                      
@@ -470,13 +466,14 @@ parseProbPath = do parens $ do
                     c <- parsePathExp               
                     return (ProbPath x c)           
                                                     
-parseProbHit :: P Exp                               
-parseProbHit = do parens $ do                       
-                    x <- parseMarkovExp             
-                    i <- identifier                 
-                    reservedOp ","                  
-                    j <- identifier                 
-                    return (ProbHit x i j)          
+parseProbHit :: P Exp
+parseProbHit = do parens $ do
+                    x <- parseMarkovExp
+                    reservedOp ","
+                    i <- identifier
+                    reservedOp ","
+                    j <- identifier
+                    return (ProbHit x i j)     
 
 
 -- ======================================================

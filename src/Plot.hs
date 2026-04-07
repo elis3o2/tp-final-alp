@@ -1,3 +1,8 @@
+{-|
+Module      : Plot
+Description : Plotting for distribution function and Markov Chains
+-}
+
 module Plot where
 
 import Data.GraphViz
@@ -36,9 +41,6 @@ plotCont x = do
         [ Data2D [Title "", Graphics.EasyPlot.Style Lines] [] pts ]
 
   return ()
-
-
-
 
 
 

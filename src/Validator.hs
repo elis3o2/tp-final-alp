@@ -1,3 +1,9 @@
+{-|
+Module      : Validator
+Description : Runtime validation of probability distributions, Markov chains,
+              and numeric values. Called before evaluation to ensure inputs
+              are mathematically well-formed.
+-}
 module Validator where
 import Monad
 import Error
@@ -89,7 +95,7 @@ valVarDisc (Pasc r p) | p <= 0 || p > 1 = throwErrorE InvalidProb
                       | otherwise       = return ()
 
 valVarDisc (Hiper m r n) | m <= 0     = throwErrorE RandInvalidForm
-                         | r < 0      = throwErrorE RandInvalidForm
+                         | r <= 0     = throwErrorE RandInvalidForm
                          | n < 0      = throwErrorE RandInvalidForm
                          | r > m      = throwErrorE RandInvalidForm
                          | n > m      = throwErrorE RandInvalidForm
@@ -103,11 +109,11 @@ valVarDisc (Custom xs ps) | V.null ps = throwErrorE RandInvalidForm
 
 -- | Continous
 valVarCont :: MonadProb m  => VarCont -> m ()
-valVarCont (Norm m u) | u < 0     = throwErrorE RandInvalidForm
+valVarCont (Norm _ u) | u <= 0    = throwErrorE RandInvalidForm                     
                       | otherwise = return ()
-valVarCont (Unif a b) | a > b = throwErrorE RandInvalidForm
+valVarCont (Unif a b) | a > b     = throwErrorE RandInvalidForm
                       | otherwise = return ()
-valVarCont (Expo a) | a < 0 = throwErrorE RandInvalidForm
+valVarCont (Expo a) | a <= 0    = throwErrorE RandInvalidForm
                     | otherwise = return ()
 
 
@@ -125,20 +131,17 @@ valMarkov names nodes = mapM_ (valNod valName) nodes
 valMkVector :: MonadProb m => Markov -> Vec Double -> m ()
 valMkVector (Mk n _) v | V.length n /= V.length v  = throwErrorE InvalidVector
                        | V.any (\p -> p < 0 || p > 1) v = throwErrorE InvalidProb
-                       | V.sum v /= 1 = throwErrorE InvalidProb
+                       | abs (V.sum v - 1) > 1e-9 = throwErrorE InvalidProb 
                        | otherwise = return ()
 
 -- | Nodes
 valNode :: MonadProb m => NodeVal -> m ()
 valNode (N nd) = view nd 0 []
-              where inn _ []   = False 
-                    inn m (a:as)| m == a = True
-                                | otherwise = inn m as
-                    view []        _ _ = return ()
-                    view ((n,p):s) sm names  | p < 0 || p > 1 = throwErrorE InvalidProb
-                                             | sm + p > 1     = throwErrorE InvalidProb
-                                             | inn n names    = throwErrorE InvalidName
-                                             | otherwise      = view s (sm + p) (n:names)
+              where view [] _ _ = return ()
+                    view ((n,p):s) sm names | p < 0 || p > 1 = throwErrorE InvalidProb
+                                            | sm + p > 1     = throwErrorE InvalidProb
+                                            | n `elem` names = throwErrorE InvalidName
+                                            | otherwise      = view s (sm + p) (n:names)
  
 -- | Names
 valMkName :: MonadProb m => Markov -> Name -> m ()
@@ -148,8 +151,7 @@ valMkName (Mk names _) n | V.elem n names = return ()
 -- | Path
 valMkPath :: MonadProb m => Markov -> Path -> m ()
 valMkPath x n | V.length n < 2 = throwErrorE InvalidSteps
-              | otherwise = do _ <- V.mapM (\name -> valMkName x name) n
-                               return ()
+              | otherwise = V.mapM_ (valMkName x) n
 
 
 -- | Steps

@@ -1,10 +1,12 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use newtype instead of data" #-}
+{-|
+Module      : AST
+Description : Language Definition
+-}
 module AST where
 import Common
 
 
--- expresiones
+-- expressions
 data ExpDisc =
     BinE Exp Exp
   | PoissE Exp
@@ -25,17 +27,17 @@ data ExpCont = NormE Exp Exp
 data RandExp = ContE ExpCont | DiscE ExpDisc deriving (Show, Eq)
 
 
-data NodeExp = NE [(Name, Exp)]    deriving (Show, Eq)
+newtype NodeExp = NE [(Name, Exp)]    deriving (Show, Eq)
 
 
-data MarkovExp = MarkovE Path    deriving (Show, Eq)
+newtype MarkovExp = MarkovE Path    deriving (Show, Eq)
 
 
 data Exp
   = VarRef Name          -- Double | Vec Double | RandVar | Markov
-  | ConstN Double          -- Double
-  | UMinus Exp           -- ExpNumC -> Double
-  | OpNum OpBin Exp Exp  -- ExpNumC -> ExpNumC -> Double 
+  | ConstN Double        -- Double
+  | UMinus Exp           -- NumExp -> Double
+  | OpNum OpBin Exp Exp  -- NumExp -> NumExp -> Double 
 
 
   -- Stats 
@@ -43,7 +45,7 @@ data Exp
   | Variance Exp -- RandExp -> Double
   | StdDev Exp   -- RandExp -> Double
   | Mode  Exp    -- RandExp -> Vec (Double)
-  | PDF Exp Exp  -- ContExp -> Double
+  | PDF Exp Exp  -- ContExp -> NumExp -> Double
   | MaxP Exp     -- DiscExp -> Double
   | MaxPDF Exp   -- DiscExp -> Double
 
@@ -59,8 +61,8 @@ data Exp
   | Rand RandExp      --  RandExp  
 
   -- Cadenas de Markov
-  | ConstCh Path 
-  | Markov MarkovExp            --  Markov
+  | ConstCh Path                -- Path
+  | Markov MarkovExp            -- Markov
 
   | ProbStep Exp Name Name Exp  -- MarkovExp -> Name -> Name -> NumExp -> Double
   | ProbPath Exp Exp            -- MarkovExp -> PathExp -> Double
@@ -84,18 +86,9 @@ data Value =
   | VPath Path
   | Dummy
 
-instance Show Value where
-  show (VNum   n) = show n
-  show (VVec   e) = show e
-  show (VRand  x) = show x  
-  show (VMark  m) = show m
-  show (VNode  n) = show n
-  show (VPath c)  = show c
-  show Dummy      = show "Dummy"
+ deriving (Show, Eq)
 
-
-
-data Type = Num | Vec | RandDisc | RandCont | Mark | Path | Nod deriving(Show,Eq)
+data Type = Num | Vec | RandDisc | RandCont | Mark | Path | Nod deriving (Show,Eq)
 
 data Comm = Print Exp
         | Let Name Exp

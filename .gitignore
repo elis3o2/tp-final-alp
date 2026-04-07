@@ -1,4 +1,5 @@
 .vscode
 dist-newstyle
-ERRREval.hs
-ERRRParser.hs
+plot1.dat
+plot2.dat
+*.png

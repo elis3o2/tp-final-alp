@@ -1,11 +1,6 @@
 {-|
-Module      : Errors
-Description : Definición del tipo de los errores
-Copyright   : (c) Mauro Jaskelioff, Guido Martínez, 2020.
-License     : GPL-3
-Maintainer  : mauro@fceia.unr.edu.ar
-Stability   : experimental
-
+Module      : Error
+Description : Type errors definition
 -}
 
 module Error where
@@ -17,7 +12,13 @@ data Error
   = ParseErr ParseError
   | ExecErr EError
   | TypeErr TError 
-  deriving (Show)
+
+instance Show Error where
+  show (ParseErr e) = show e
+  show (ExecErr  e) = "Error in Eval: " ++ show e 
+  show (TypeErr  e) = "Error in TypeChecker: " ++ show e
+
+
 
 data EError
   = DivByZero
@@ -43,10 +44,12 @@ data TError =
   | RandExpExpected
   | NumExpExpected
   | PathExpExpected
-  | VarNotScoope
+  | VarNotScope
   | InvalidVarType
   | EmptyPath
   | MkExpExpected
+  
+  deriving (Eq)
 
 
 instance Show EError where
@@ -63,13 +66,13 @@ instance Show EError where
   show InvalidName      = "Name is not part of the Markov Chain"  
   show InvalidVector    = "Vector provided is not valid"
 instance Show TError where
-  show InvalidVarType   = "Variable type not adimited"
-  show VarNotScoope     = "Variable not in scoope"
+  show InvalidVarType   = "Variable type not admitted"
+  show VarNotScope      = "Variable not in scope"
   show ContExpExpected  = "Continuous expression was expected"
   show DiscExpExpected  = "Discrete expression was expected"
   show NumExpExpected   = "Numeric expression was expected"
   show VecExpExpected   = "Vector expression was expected"
   show RandExpExpected  = "Random expression was expected"
   show PathExpExpected = "Path expression was expected"
-  show EmptyPath       = "Paths can´t be empyt"
+  show EmptyPath        = "Paths can't be empty"
   show MkExpExpected    = "Markov Expression was expected"

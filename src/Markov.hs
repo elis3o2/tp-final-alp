@@ -1,4 +1,14 @@
-module Markov where
+{-|
+Module      : Markov
+Description : Markov Chains Functions
+-}
+
+module Markov
+  ( getNames, getMatrix, makeMatrix
+  , getProbSteps, getProbPath, getProbHit
+  , getStationary
+  ) where
+  
 
 import Common
 import qualified Data.Vector as V
@@ -13,9 +23,9 @@ getMatrix :: Markov -> Matrix Double
 getMatrix (Mk _ m) = m
 
 
-makeMatriz' :: [Name] -> [NodeVal] -> [[Double]]
-makeMatriz' _ [] = []
-makeMatriz' names (N n:nodes) = makerow names n : makeMatriz' names nodes
+makeMatrix' :: [Name] -> [NodeVal] -> [[Double]]
+makeMatrix' _ [] = []
+makeMatrix' names (N n:nodes) = makerow names n : makeMatrix' names nodes
                               where
                                 value _ [] = 0
                                 value m ((s,d):ss) | m == s    = d
@@ -25,8 +35,8 @@ makeMatriz' names (N n:nodes) = makerow names n : makeMatriz' names nodes
 
 
 
-makeMatriz :: [Name] -> [NodeVal] -> Matrix Double
-makeMatriz names nodes = V.fromList (map V.fromList (makeMatriz' names nodes))
+makeMatrix :: [Name] -> [NodeVal] -> Matrix Double
+makeMatrix names nodes = V.fromList (map V.fromList (makeMatrix' names nodes))
 
 
 
@@ -48,7 +58,6 @@ getProbPath (Mk names mat) c =
 getStationary :: Markov -> Vec Double
 getStationary (Mk _ m ) = let (a, b) = buildStationarySystem m 
                           in gaussJordan a b
-
 
 
 

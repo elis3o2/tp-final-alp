@@ -1,5 +1,8 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Redundant return" #-}
+{-|
+Module      : Eval
+Description : Expression evaluator
+-}
+
 module Eval where
 
 import AST
@@ -37,7 +40,7 @@ eval x@(ProbBetween   {}) = VNum   <$> evalNumExp    x
 eval x@(Mode          {}) = VVec   <$> evalVecExp    x
 eval x@(ConstV        {}) = VVec   <$> evalVecExp    x
 eval x@(Rand          {}) = VRand  <$> evalRandExp   x
-eval x@(ConstCh       {}) = VPath  <$> evalPathExp  x
+eval x@(ConstCh       {}) = VPath  <$> evalPathExp   x
 eval x@(Markov        {}) = VMark  <$> evalMarkovExp x
 eval x@(ProbStep      {}) = VNum   <$> evalNumExp    x
 eval x@(ProbPath      {}) = VNum   <$> evalNumExp    x
@@ -68,7 +71,7 @@ getProb (Disc x) op k = do k' <- toInt k
                            valProbDisc x op k'
                            return (getProbDisc x op k')
 
-getProb (Cont x) op z = do return (getProbCont x op z)
+getProb (Cont x) op z = return (getProbCont x op z)
 
 -- Two Operators
 getProbBt :: MonadProb m => RandVar -> OpComp -> Double -> OpComp -> Double -> m Double
@@ -124,7 +127,7 @@ evalNumExp (Variance v) = do v' <- evalRandExp v
                              return (getVariance v')
 
 evalNumExp (StdDev v) = do v' <- evalRandExp v
-                           return (getDesv v')
+                           return (getStdDev v')
 
 evalNumExp (MaxP v) = do v' <- evalRandExp v
                          return (getMaxP v')
@@ -157,7 +160,7 @@ evalNumExp  _ = throwErrorE TypeCheckError
 
 
 -- =========================================
--- Vector Expression Evaluator
+-- | Vector Expression Evaluator
 -- =========================================
 evalVecExp :: MonadProb m => Exp -> m (Vec Double)
 evalVecExp (VarRef x) = getVec x
@@ -170,7 +173,7 @@ evalVecExp _         = throwErrorE TypeCheckError
 
 
 -- =========================================
--- Random Variables Evaluator
+-- | Random Variables Evaluator
 -- ==========================================
 evalRandExp :: MonadProb m => Exp -> m RandVar
 evalRandExp (VarRef x)       = getRand x
@@ -257,7 +260,7 @@ evalMarkov :: MonadProb m => MarkovExp -> m Markov
 evalMarkov (MarkovE names) = let lnames = V.toList names in
                              do nodes <- mapM getNode lnames
                                 valMarkov lnames nodes
-                                return (Mk names (makeMatriz lnames nodes))
+                                return (Mk names (makeMatrix lnames nodes))
 -- | Node
 evalNodeExp :: MonadProb m => NodeExp -> m NodeVal
 evalNodeExp (NE l) = do

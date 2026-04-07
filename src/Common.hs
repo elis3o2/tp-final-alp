@@ -1,21 +1,34 @@
+{-|
+Module      : Common
+Description : Generic definitions
+-}
 module Common where 
 import qualified Data.Vector as V
 
 
 type Vec a = V.Vector a
 
+indexOf :: Eq a => Vec a -> a -> Int
+indexOf xs k =
+  case V.elemIndex k xs of
+    Just i  -> i
+    Nothing -> error "Invalid Index"
+
+
+
 type Matrix a = Vec (Vec a)
+
 
 type Name = String
 
-type Path = Vec String
+type Path = Vec Name
 
--- Operadores
+-- | Operators
 data OpComp  = Lt | Gt | Lte | Gte | Eq | NEq deriving (Show, Eq)
 
 data OpBin = Plus | Minus | Times | Div deriving (Show, Eq)
 
-
+-- | Random Variables
 data VarDisc =
     Bin Int Double
   | Poiss Double
@@ -34,15 +47,10 @@ data VarCont = Norm Double Double
 
 data RandVar = Cont  VarCont | Disc  VarDisc deriving (Show, Eq)
 
+
+
+-- | Markov Chains
 data Markov = Mk (Vec Name) (Matrix Double)   deriving (Show, Eq)
 
-data NodeVal = N [(Name, Double)]    deriving (Show, Eq)
-
-
-indexOf :: Eq a => Vec a -> a -> Int
-indexOf xs k =
-  case V.elemIndex k xs of
-    Just i  -> i
-    Nothing -> error "Invalid Index"
-
+newtype NodeVal = N [(Name, Double)]    deriving (Show, Eq)
 

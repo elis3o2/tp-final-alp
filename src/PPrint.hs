@@ -1,3 +1,8 @@
+{-|
+Module      : PPrint
+Description : Pretty Printer for expressions
+-}
+
 module PPrint where
 
 import AST
@@ -11,10 +16,9 @@ import Monad
 import Global
 import Control.Monad.Reader (asks)
 
-data PPConf = PPConf { ppDecimals :: Int}
-
-formatDouble :: PPConf -> Double -> String
-formatDouble conf x = trimZeros (showFFloat (Just (ppDecimals conf)) x "")
+formatDouble :: MonadProb m => Double -> m String
+formatDouble x = do d <- asks decimals
+                    return $ trimZeros (showFFloat (Just d) x "")
 
 render :: Doc AnsiStyle -> String
 render = unpack . renderStrict . layoutSmart defaultLayoutOptions
@@ -56,12 +60,14 @@ trimZeros s =
 int2Doc :: Int -> Doc AnsiStyle
 int2Doc n = numColor (pretty n)
 
-double2Doc :: PPConf -> Double -> Doc AnsiStyle
-double2Doc conf n = numColor . pretty $ trimZeros (formatDouble conf n)
+double2Doc :: MonadProb m => Double -> m (Doc AnsiStyle)
+double2Doc n = do s <- formatDouble n
+                  return $ numColor (pretty s)
 
 -- | Vectors
-vec2Doc :: PPConf -> Vec Double -> Doc AnsiStyle
-vec2Doc conf = tupled . map (double2Doc conf) . V.toList
+vec2Doc :: MonadProb m => Vec Double -> m (Doc AnsiStyle)
+vec2Doc v = do ds <- mapM double2Doc (V.toList v)
+               return $ tupled ds
 
 vecInt2Doc :: Vec Int -> Doc AnsiStyle
 vecInt2Doc = tupled . map int2Doc . V.toList
@@ -88,303 +94,428 @@ opComp2Doc Eq  = opColor (pretty "=")
 opComp2Doc NEq = opColor (pretty "/=")
 
 
+flipOp :: OpComp -> OpComp
+flipOp Lt  = Gt
+flipOp Gt  = Lt
+flipOp Lte = Gte
+flipOp Gte = Lte
+flipOp op  = op
+
+
 -- | Random Variables
-varRand2Doc ::PPConf -> RandVar -> Doc AnsiStyle
-varRand2Doc conf (Disc x) = varDisc2Doc conf x
-varRand2Doc conf (Cont x) = varCont2Doc conf x
+varRand2Doc :: MonadProb m => RandVar -> m (Doc AnsiStyle)
+varRand2Doc (Disc x) = varDisc2Doc x
+varRand2Doc (Cont x) = varCont2Doc x
 
 
 -- | Discrete Distributions
-varDisc2Doc :: PPConf -> VarDisc -> Doc AnsiStyle
-varDisc2Doc conf (Bin n p) =
-  group (randomColor (pretty "Bin") <> parens (
-  nest 2 (int2Doc n <> pretty "," <> line <> double2Doc conf p)))
+varDisc2Doc :: MonadProb m => VarDisc -> m (Doc AnsiStyle)
+varDisc2Doc (Bin n p) = do pd <- double2Doc p
+                           return $
+                             group (randomColor (pretty "Bin") <> parens (
+                             nest 2 (int2Doc n <> pretty "," <> line <> pd)))
 
-varDisc2Doc conf (Poiss l) =
-  group (randomColor (pretty "Poi") <> parens (
-  nest 2 (double2Doc conf l)))
+varDisc2Doc (Poiss l) = do pl <- double2Doc l
+                           return $
+                             group (randomColor (pretty "Poi") <> parens (
+                             nest 2 pl))
 
-varDisc2Doc conf (Geo p) =
-  group (randomColor (pretty "Geo") <> parens (
-  nest 2 (double2Doc conf p)))
+varDisc2Doc (Geo p) = do pp <- double2Doc p
+                         return $
+                           group (randomColor (pretty "Geo") <> parens (
+                           nest 2 pp))
 
-varDisc2Doc conf (Pasc r p) =
-  group (randomColor (pretty "Pasc") <> parens (
-  nest 2 (int2Doc r <> pretty "," <> line <> double2Doc conf p)))
+varDisc2Doc (Pasc r p) = do pp <- double2Doc p
+                            return $
+                              group (randomColor (pretty "BN") <> parens (
+                              nest 2 (int2Doc r <> pretty "," <> line <> pp)))
 
-varDisc2Doc conf (Hiper m r n) =
-  group (randomColor (pretty "Hiper") <> parens (
-  nest 2 (
-    int2Doc m <> pretty "," <> line <>
-    int2Doc r <> pretty "," <> line <>
-    int2Doc n
-  )))
+varDisc2Doc (Hiper m r n) = do return $
+                                group (randomColor (pretty "HG") <> parens (
+                                nest 2 (
+                                  int2Doc m <> pretty "," <> line <>
+                                  int2Doc r <> pretty "," <> line <>
+                                  int2Doc n
+                                )))
 
-varDisc2Doc conf (Custom v1 v2) =
-  group (pretty "Custom" <> parens (
-  nest 2 ( vecInt2Doc v1 <> pretty "," <> line <>
-        vec2Doc conf v2)))
-
+varDisc2Doc (Custom v1 v2) = do pv2 <- vec2Doc v2
+                                return $
+                                  group (brackets (
+                                    nest 2 (vecInt2Doc v1 <> pretty "," <> line <> pv2)))
 
 -- | Continous Distributions
-varCont2Doc :: PPConf ->VarCont -> Doc AnsiStyle
-varCont2Doc conf (Norm n m) =
-  group (randomColor (pretty "Norm") <> parens (
-  nest 2 (
-    double2Doc conf n <> pretty "," <> line <>
-    double2Doc conf m
-  )))
+varCont2Doc :: MonadProb m => VarCont -> m (Doc AnsiStyle)
+varCont2Doc (Norm n m) = do pn <- double2Doc n
+                            pm <- double2Doc m
+                            return $
+                              group (randomColor (pretty "N") <> parens (
+                              nest 2 (
+                                pn <> pretty "," <> line <>
+                                pm
+                              )))
 
-varCont2Doc conf (Unif a b) =
-  group (randomColor (pretty "Unif") <> parens (
-  nest 2 (
-    double2Doc conf a <> pretty "," <> line <>
-    double2Doc conf b
-  )))
+varCont2Doc (Unif a b) = do pa <- double2Doc a
+                            pb <- double2Doc b
+                            return $
+                              group (randomColor (pretty "Unif") <> parens (
+                              nest 2 (
+                                pa <> pretty "," <> line <>
+                                pb
+                              )))
 
-varCont2Doc conf (Expo a) =
-  randomColor (pretty "Expo") <> parens(
-  nest 2 (double2Doc conf a))
+varCont2Doc (Expo a) = do pa <- double2Doc a
+                          return $
+                            randomColor (pretty "Exp") <> parens(
+                            nest 2 pa)
 
 
 
 -- | Random Expressions
-expRand2Doc :: PPConf -> RandExp -> Doc AnsiStyle
-expRand2Doc conf (DiscE x)  = expDisc2Doc conf x
-expRand2Doc conf (ContE x)  = expCont2Doc conf x
+expRand2Doc :: MonadProb m => RandExp -> m (Doc AnsiStyle)
+expRand2Doc (DiscE x)  = expDisc2Doc x
+expRand2Doc (ContE x)  = expCont2Doc x
 
 
 -- | Discrete Expressions
-expDisc2Doc :: PPConf -> ExpDisc -> Doc AnsiStyle
-expDisc2Doc conf (BinE n p) =
-  group (randomColor (pretty "Bin") <> parens (
-  nest 2  (prettyExp conf n <> pretty "," <> line <> prettyExp conf p)))
+expDisc2Doc :: MonadProb m => ExpDisc -> m (Doc AnsiStyle)
+expDisc2Doc (BinE n p) = do pn <- prettyExp n
+                            pp <- prettyExp p
+                            return $
+                              group (randomColor (pretty "Bin") <> parens (
+                              nest 2  (pn <> pretty "," <> line <> pp)))
 
-expDisc2Doc conf (PoissE l) =
-  group (randomColor (pretty "Poi") <> parens (
-  nest 2 (prettyExp conf l)))
+expDisc2Doc (PoissE l) = do pl <- prettyExp l
+                            return $
+                              group (randomColor (pretty "Poi") <> parens (
+                              nest 2 pl))
 
-expDisc2Doc conf (GeoE p) =
-  group (randomColor (pretty "Geo") <> parens (
-  nest 2 (prettyExp conf p)))
+expDisc2Doc (GeoE p) = do pp <- prettyExp p
+                          return $
+                            group (randomColor (pretty "Geo") <> parens (
+                            nest 2 pp))
 
-expDisc2Doc conf (PascE r p) =
-  group (randomColor (pretty "Pasc") <> parens (
-  nest 2 (prettyExp conf r <> pretty ","  <> line <> prettyExp conf p)))
+expDisc2Doc (PascE r p) = do pr <- prettyExp r
+                             pp <- prettyExp p
+                             return $
+                               group (randomColor (pretty "BN") <> parens (
+                               nest 2 (pr <> pretty ","  <> line <> pp)))
 
-expDisc2Doc conf (HiperE m r n) = 
-  group (randomColor (pretty "Hiper") <> parens(
-  nest 2 (
-    prettyExp conf m <> pretty "," <> line <>
-    prettyExp conf r <> pretty "," <> line <>
-    prettyExp conf n
-  )))
+expDisc2Doc (HiperE m r n) = do pm <- prettyExp m
+                                pr <- prettyExp r
+                                pn <- prettyExp n
+                                return $
+                                  group (randomColor (pretty "HG") <> parens(
+                                  nest 2 (
+                                    pm <> pretty "," <> line <>
+                                    pr <> pretty "," <> line <>
+                                    pn
+                                  )))
 
-expDisc2Doc conf (CustomE xs ps) = 
-  group (brackets (prettyExp conf xs) <> pretty "," <> line 
-    <> prettyExp conf ps)
+expDisc2Doc (CustomE xs ps) = do pxs <- prettyExp xs
+                                 pps <- prettyExp ps
+                                 return $
+                                   group (brackets (pxs <> pretty "," <> line 
+                                     <> pps))
 
 
 -- Continous Expressions
-expCont2Doc ::PPConf -> ExpCont -> Doc AnsiStyle
-expCont2Doc conf (NormE n m) =
-  group (randomColor (pretty "Norm") <> parens (
-  nest 2 (
-    prettyExp conf n <> pretty "," <> line <>
-    prettyExp conf m
-  )))
+expCont2Doc :: MonadProb m => ExpCont -> m (Doc AnsiStyle)
+expCont2Doc (NormE n m) = do pn <- prettyExp n
+                             pm <- prettyExp m
+                             return $
+                               group (randomColor (pretty "N") <> parens (
+                               nest 2 (
+                                 pn <> pretty "," <> line <>
+                                 pm
+                               )))
 
-expCont2Doc conf (UnifE a b) =
-  group (randomColor (pretty "Unif") <> parens (
-  nest 2 (
-    prettyExp conf a <> pretty "," <> line <>
-    prettyExp conf b
-  )))
+expCont2Doc (UnifE a b) = do pa <- prettyExp a
+                             pb <- prettyExp b
+                             return $
+                               group (randomColor (pretty "Unif") <> parens (
+                               nest 2 (
+                                 pa <> pretty "," <> line <>
+                                 pb
+                               )))
 
-expCont2Doc conf (ExpoE a) =
-   group (randomColor (pretty "Expo") <> parens (
-  nest 2 (prettyExp conf a)))
-
-
+expCont2Doc (ExpoE a) = do pa <- prettyExp a
+                           return $
+                             group (randomColor (pretty "Exp") <> parens (
+                             nest 2 pa))
 
 
 -- | Markov
-markov2Doc :: PPConf -> Markov -> Doc AnsiStyle
-markov2Doc conf (Mk names mat) = vsep  rows
+markov2Doc :: MonadProb m => Markov -> m (Doc AnsiStyle)
+markov2Doc (Mk names mat) = do
+          ds <- mapM vec2Doc (V.toList mat)
+          let ns   = V.toList names
+              rows = zipWith rowDoc ns ds
+          return $ vsep rows
           where
-            ns = V.toList names
-            ms = V.toList mat
-
-            rows = zipWith rowDoc ns ms
-            rowDoc name row = hsep [ nameColor (pretty name) , vec row]
-            vec = brackets. hsep . punctuate comma . map (double2Doc conf). V.toList
+            rowDoc name row = hsep [ nameColor (pretty name) , row]
             
 
 -- | Main 
-prettyExp :: PPConf -> Exp -> Doc AnsiStyle
-prettyExp conf (ConstN i) = double2Doc conf i
+prettyExp :: MonadProb m => Exp -> m (Doc AnsiStyle)
+prettyExp (ConstN i) = double2Doc i
 
-prettyExp conf (VarRef x) = varColor (pretty x)
+prettyExp (VarRef x) = return $ varColor (pretty x)
 
-prettyExp conf (UMinus n) =
-  pretty "-" <> maybeParenN conf n
+prettyExp (UMinus n) = do
+  pn <- maybeParenN n
+  return $ pretty "-" <> pn
 
-prettyExp conf (OpNum Plus a b) =
-  prettyExp conf a <+> opBin2Doc Plus <+> prettyExp conf b
+prettyExp (OpNum Plus a b) = do
+  pa <- prettyExp a
+  pb <- prettyExp b
+  return $ pa <+> opBin2Doc Plus <+> pb
 
-prettyExp conf (OpNum Minus a b) =
-  prettyExp conf a <+> opBin2Doc Minus <+> maybeParenN conf b
+prettyExp (OpNum Minus a b) = do
+  pa <- prettyExp a
+  pb <- maybeParenN b
+  return $ pa <+> opBin2Doc Minus <+> pb
 
-prettyExp conf (OpNum Times a b) =
-  maybeParenN conf a <+> opBin2Doc Times <+> maybeParenN conf b
+prettyExp (OpNum Times a b) = do
+  pa <- maybeParenN a
+  pb <- maybeParenN b
+  return $ pa <+> opBin2Doc Times <+> pb
 
-prettyExp conf (OpNum Div a b) =
-  maybeParenN conf a <+> opBin2Doc Div <+> maybeParenN conf b
+prettyExp (OpNum Div a b) = do
+  pa <- maybeParenN a
+  pb <- maybeParenN b
+  return $ pa <+> opBin2Doc Div <+> pb
 
-prettyExp conf (Access v n) =
-  maybeParenN conf v <> brackets (prettyExp conf n)
+prettyExp (Access v n) = do
+  pv <- maybeParenN v
+  pn <- prettyExp n
+  return $ pv <> brackets pn
 
-prettyExp conf (Mean x) =
-  functionColor (pretty "E") <> parens (prettyExp conf x)
+prettyExp (Mean x) = do
+  px <- prettyExp x
+  return $ functionColor (pretty "E") <> parens px
 
-prettyExp conf (Variance x) =
-  functionColor (pretty "V") <> parens (prettyExp conf x)
+prettyExp (Variance x) = do
+  px <- prettyExp x
+  return $ functionColor (pretty "V") <> parens px
 
-prettyExp conf (StdDev x) =
-  functionColor (pretty "D") <> parens (prettyExp conf x)
+prettyExp (StdDev x) = do
+  px <- prettyExp x
+  return $ functionColor (pretty "SD") <> parens px
 
-prettyExp conf (PDF x n) =
-  group (
-    functionColor (pretty "pdf") <> parens (
-      nest 2 (
-        prettyExp conf x <> pretty "," <> line <>
-        prettyExp conf n
+prettyExp (PDF x n) = do
+  px <- prettyExp x
+  pn <- prettyExp n
+  return $
+    group (
+      functionColor (pretty "pdf") <> parens (
+        nest 2 (
+          px <> pretty "," <> line <>
+          pn
+        )
       )
     )
-  )
 
-prettyExp conf (MaxP x) =
-  functionColor (pretty "maxP") <+> maybeParenN conf x
+prettyExp (MaxP x) = do
+  px <- maybeParenN x
+  return $ functionColor (pretty "maxP") <+> px
 
-prettyExp conf (MaxPDF x) =
-  functionColor (pretty "maxPDF") <+> prettyExp conf x
+prettyExp (MaxPDF x) = do
+  px <- prettyExp x
+  return $ functionColor (pretty "maxPDF") <+> px
 
-prettyExp conf (Prob x op n) =
-  group (
-    functionColor (pretty "P") <> parens (
-      nest 2 (
-        prettyExp conf x <+>
-        opComp2Doc op <+>
-        prettyExp conf n
+prettyExp (Prob x op n) = do
+  px <- prettyExp x
+  pn <- prettyExp n
+  return $
+    group (
+      functionColor (pretty "P") <> parens (
+        nest 2 (
+          px <+>
+          opComp2Doc op <+>
+          pn
+        )
       )
     )
-  )
 
-prettyExp conf (ProbBetween x op1 n op2 m) =
-  group (
-    functionColor (pretty "P") <> parens (
-      nest 2 (
-        prettyExp conf n <+>
-        opComp2Doc op1 <+>
-        prettyExp conf x <+>
-        opComp2Doc op2 <+>
-        prettyExp conf m
+prettyExp (ProbBetween x op1 n op2 m) = do
+  px <- prettyExp x
+  pn <- prettyExp n
+  pm <- prettyExp m
+  return $
+    group (
+      functionColor (pretty "P") <> parens (
+        nest 2 (
+          pn <+>
+          opComp2Doc (flipOp op1) <+>
+          px <+>
+          opComp2Doc op2 <+>
+          pm
+        )
       )
     )
-  )
 
-prettyExp conf (ConstV v) =
-  parens $ sep $ punctuate (pretty ",") (map (prettyExp conf) (V.toList v))
+prettyExp (ConstV v) = do
+  ps <- mapM prettyExp (V.toList v)
+  return $ parens $ sep $ punctuate (pretty ",") ps
 
-prettyExp conf (Mode x) =
-  functionColor (pretty "mode") <+> prettyExp conf x
+prettyExp (Mode x) = do
+  px <- prettyExp x
+  return $ functionColor (pretty "mode") <+> px
 
-prettyExp conf (Rand x) =
-  expRand2Doc conf x
+prettyExp (Rand x) = expRand2Doc x
 
-prettyExp conf (ConstCh x) =
-  path2Doc x
+prettyExp (ConstCh x) = return $ path2Doc x
 
-prettyExp conf (Markov (MarkovE x)) =
-  functionColor (pretty "mk") <+> path2Doc x
+prettyExp (Markov (MarkovE x)) =
+  return $ functionColor (pretty "mk") <+> path2Doc x
 
-prettyExp conf (ProbStep x i j n) =
-  group (
-    functionColor (pretty "F") <+> prettyExp conf n <> parens (
-      nest 2 (
-        prettyExp conf x <> pretty "," <> line <>
-        nameColor (pretty i) <> pretty "," <> line <>
-        nameColor (pretty j)
+prettyExp (ProbStep x i j n) = do
+  px <- prettyExp x
+  pn <- prettyExp n
+  return $
+    group (
+      functionColor (pretty "F") <+> pn <> parens (
+        nest 2 (
+          px <> pretty "," <> line <>
+          nameColor (pretty i) <> pretty "," <> line <>
+          nameColor (pretty j)
+        )
       )
     )
-  )
 
-prettyExp conf (ProbPath x c) =
-  group (
-    functionColor (pretty "F") <> parens (
-      nest 2 (
-        prettyExp conf x <> pretty "," <> line <>
-        prettyExp conf c
+prettyExp (ProbPath x c) = do
+  px <- prettyExp x
+  pc <- prettyExp c
+  return $
+    group (
+      functionColor (pretty "F") <> parens (
+        nest 2 (
+          px <> pretty "," <> line <>
+          pc
+        )
       )
     )
-  )
 
-prettyExp conf (ProbHit c i j) =
-  group (
-    functionColor (pretty "F") <> parens (
-      nest 2 (
-        prettyExp conf c <> pretty "," <> line <>
-        nameColor (pretty i) <> pretty "," <> line <>
-        nameColor (pretty j)
+prettyExp (ProbHit c i j) = do
+  pc <- prettyExp c
+  return $
+    group (
+      functionColor (pretty "F") <> parens (
+        nest 2 (
+          pc <> pretty "," <> line <>
+          nameColor (pretty i) <> pretty "," <> line <>
+          nameColor (pretty j)
+        )
       )
     )
-  )
 
-prettyExp conf (NextDist x n) =
-  group (
-    functionColor (pretty "ex") <> parens (
-      nest 2 (
-        prettyExp conf x <> pretty "," <> line <>
-        prettyExp conf n
+prettyExp (NextDist x n) = do
+  px <- prettyExp x
+  pn <- prettyExp n
+  return $
+    group (
+      functionColor (pretty "ex") <> parens (
+        nest 2 (
+          px <> pretty "," <> line <>
+          pn
+        )
       )
     )
-  )
 
-prettyExp conf (Stationary x) =
-  functionColor (pretty "stationary") <+> parens (prettyExp conf x)
+prettyExp (Stationary x) = do
+  px <- prettyExp x
+  return $ functionColor (pretty "stationary") <+> parens px
 
-prettyExp conf (SimulFromName x n i) =
-  group (
-    functionColor (pretty "simulate") <> parens (
-      nest 2 (
-        prettyExp conf x <> pretty "," <> line <>
-        prettyExp conf i <> pretty "," <> line <>
-        functionColor (pretty "start") <+> pretty "=" <+> varColor (pretty n)
+prettyExp (SimulFromName x n i) = do
+  px <- prettyExp x
+  ppi <- prettyExp i
+  return $
+    group (
+      functionColor (pretty "simulate") <> parens (
+        nest 2 (
+          px <> pretty "," <> line <>
+          ppi <> pretty "," <> line <>
+          functionColor (pretty "start") <+> pretty "=" <+> varColor (pretty n)
+        )
       )
     )
-  )
 
-prettyExp conf (SimulFromVec x v i) =
-  group (
-    functionColor (pretty "simulate") <> parens (
-      nest 2 (
-        prettyExp conf x <> pretty "," <> line <>
-        prettyExp conf i <> pretty "," <> line <>
-        functionColor (pretty "prob") <+> pretty "=" <+> prettyExp conf v
+prettyExp (SimulFromVec x v i) = do
+  px <- prettyExp x
+  pv <- prettyExp v
+  ppi <- prettyExp i
+  return $
+    group (
+      functionColor (pretty "simulate") <> parens (
+        nest 2 (
+          px <> pretty "," <> line <>
+          ppi <> pretty "," <> line <>
+          functionColor (pretty "prob") <+> pretty "=" <+> pv
+        )
       )
     )
-  )
 
 
-maybeParenN :: PPConf -> Exp -> Doc AnsiStyle
-maybeParenN conf e@(OpNum Plus  _ _)  = parens (prettyExp conf e)
-maybeParenN conf e@(OpNum Minus _ _)  = parens (prettyExp conf e)
-maybeParenN conf e                    = prettyExp conf e
+maybeParenN :: MonadProb m => Exp -> m (Doc AnsiStyle)
+maybeParenN e@(OpNum Plus  _ _) = parens <$> prettyExp e
+maybeParenN e@(OpNum Minus _ _) = parens <$> prettyExp e
+maybeParenN e                   = prettyExp e
 
 
-ppValue :: PPConf -> Value -> Doc AnsiStyle
-ppValue conf (VRand x) = varRand2Doc conf x <> pretty "\n"
-ppValue conf (VNum x)  = double2Doc conf x <> pretty "\n"
-ppValue conf (VVec x)  = vec2Doc conf x <> pretty "\n"
-ppValue conf (VMark x) = markov2Doc conf x <> pretty "\n"
-ppValue conf (VPath x) = path2Doc x <> pretty "\n"
+
+ppNodesExp :: MonadProb m => NodeExp -> m (Doc AnsiStyle)
+ppNodesExp (NE nodes) = do
+  ps <- mapM (\(n, v) -> do pv <- prettyExp v
+                            return $ parens (nameColor (pretty n) <> pretty "," <> pv)) nodes
+  return $ brackets . hsep . punctuate comma $ ps
+
+
+
+ppComm :: MonadProb m => Comm -> m (Doc AnsiStyle)
+ppComm (Let x e) = do ty <- getTy x
+                      pe <- prettyExp e
+                      let op = case ty of
+                                 RandCont -> pretty "~"
+                                 RandDisc -> pretty "~"
+                                 _        -> pretty "="
+                      return $ group (nameColor (pretty x) <+> op <+> nest 2 pe)
+
+ppComm (Print x) = do px <- prettyExp x
+                      return $ group (functionColor (pretty "print") <> parens px)
+
+ppComm (Table x) = do px <- prettyExp x
+                      return $ group (functionColor (pretty "table") <> parens px)
+
+ppComm (TableR x n m) = do px <- prettyExp x
+                           pn <- prettyExp n
+                           pm <- prettyExp m
+                           return $ group (
+                              functionColor (pretty "table") <> parens (
+                                nest 2 (
+                                  px <> pretty "," <> line <>
+                                  pn <> pretty "," <> line <>
+                                  pm)))
+
+ppComm (Plot x) = do px <- prettyExp x
+                     return $ group (functionColor (pretty "plot") <> parens px)
+
+ppComm (LetN x n) = do pe <- ppNodesExp n
+                       return $ group (
+                         nameColor (pretty x) <> pretty " ->" <>
+                         nest 2 (line <> pe))
+
+
+ppValue :: MonadProb m => Value -> m (Doc AnsiStyle)
+ppValue (VRand x) = do pd <- varRand2Doc x
+                       return $ pd <> pretty "\n"
+ppValue (VNum x)  = do pd <- double2Doc x
+                       return $ pd <> pretty "\n"
+ppValue (VVec x)  = do pd <- vec2Doc x
+                       return $ pd <> pretty "\n"
+ppValue (VMark x) = do pd <- markov2Doc x
+                       return $ pd <> pretty "\n"
+ppValue (VPath x) = return $ path2Doc x <> pretty "\n"
+ppValue (VNode (N pairs)) = do 
+  let ds = map (\(n, p) -> nameColor (pretty n) <+> pretty ":" <+> pretty (show p)) pairs
+  return $ brackets (hsep (punctuate comma ds)) <> pretty "\n"
+ppValue Dummy = return $ pretty "DUMMY" <> pretty "\n"

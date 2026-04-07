@@ -1,3 +1,8 @@
+{-|
+Module      : Distribution
+Description : Distribution probability functions definition
+-}
+
 module Distribution where
 
 import Common
@@ -8,7 +13,7 @@ import Validator
 
 
 -- =======================================
--- | Prbabilty Functions
+-- | Probability Functions
 -- =======================================
 -- | Discrete
 functionDisc :: VarDisc -> Int -> Double
@@ -39,13 +44,13 @@ functionDisc (Hiper m r n) k = fromIntegral (
 functionDisc (Custom xs ps) k = ps V.! indexOf xs k
 
 -----------------------------------------------------------------
--- | Continuos
+-- | Continuous
 functionCont :: VarCont -> Double -> Double 
 -- NORMAL
 functionCont (Norm m s) x = 1 / (s * sqrt (2 * pi)) *  
                            exp (- ((x - m)^2) / (2 * s^2))
 
--- EXPONENCIAL
+-- EXPONENTIAL
 functionCont (Expo l) x | x < 0  = 0
                         | otherwise  = l * exp (-l * x)
 -- UNIFORM
@@ -126,7 +131,7 @@ getMeanDisc (Hiper m r n) = let m' = fromIntegral m
 getMeanDisc (Custom xs ps) = V.sum (V.zipWith (\x p -> fromIntegral x * p) xs ps)
 
 getMeanCont :: VarCont -> Double
-getMeanCont (Norm m u) = m
+getMeanCont (Norm m _) = m
 getMeanCont (Expo a) = 1 / a
 getMeanCont (Unif a b) = (a + b) / 2
 
@@ -154,15 +159,15 @@ getVarianceDisc (Custom xs ps) = let xs' = V.map fromIntegral xs
                                  in e2 - e * e
 
 getVarianceCont :: VarCont -> Double
-getVarianceCont (Norm m s) = s^2
+getVarianceCont (Norm _ s) = s^2
 getVarianceCont (Expo  a) = 1 / a^2
 getVarianceCont (Unif  a  b) = (b - a)^2 / 12
 
 ----------------------------------------------------------
 -- | Standard Deviation
-getDesv :: RandVar -> Double
-getDesv (Disc x) = sqrt (getVarianceDisc x)
-getDesv (Cont x) = sqrt (getVarianceCont x)
+getStdDev :: RandVar -> Double
+getStdDev (Disc x) = sqrt (getVarianceDisc x)
+getStdDev (Cont x) = sqrt (getVarianceCont x)
 
 ----------------------------------------------------------
 -- | Mode
@@ -228,7 +233,7 @@ getPDF (Cont x) i = functionCont x i
 getPDF (Disc _) _ = error "Not definded"
 
 ------------------------------------------------------
--- | MaxPDF 
+-- | Max PDF 
 getMaxPDF :: RandVar ->  Double
 getMaxPDF x@(Cont (Norm m _)) = getPDF x m
 getMaxPDF x@(Cont (Expo _))   = getPDF x 0
@@ -239,19 +244,22 @@ getMaxPDF (Disc _) = error "Not definded"
 
 
 
+-- ===========================================
+-- Utils
+-- ===========================================
 -- Utils for plot and print
 nameDisc :: VarDisc -> String
 nameDisc (Bin    {}) = "binomial"
 nameDisc (Poiss  {}) = "poisson"
-nameDisc (Geo    {}) = "geometrica"
+nameDisc (Geo    {}) = "geometric"
 nameDisc (Pasc   {}) = "pascal"
-nameDisc (Hiper  {}) = "hipergeometrica"
+nameDisc (Hiper  {}) = "hipergeometric"
 nameDisc (Custom {}) = "custom"
 
 nameCont :: VarCont -> String
 nameCont (Norm {}) = "normal"
-nameCont (Expo {}) = "exponencial"
-nameCont (Unif {}) = "uniforme"
+nameCont (Expo {}) = "exponential"
+nameCont (Unif {}) = "uniform"
 
 
 

@@ -1,3 +1,9 @@
+{-|
+Module      : TypeChecker
+Description : Static type checker for expressions and commands.
+              Variables are registered in the global state with a Dummy value
+              during type checking to enable forward error detection.
+-}
 module TypeChecker where
 import Monad
 import AST
@@ -31,7 +37,7 @@ checkType   (VarRef n)        = do d <- getDecls
                                    case M.lookup n d of
                                       Just (_,ty) -> return ty
                                       Nothing     ->
-                                        throwErrorT VarNotScoope
+                                        throwErrorT VarNotScope
 checkType x@(ConstN       {}) = do checkNumExp x
                                    return Num
 checkType x@(UMinus       {}) = do checkNumExp x
@@ -150,13 +156,13 @@ checkRandExp (Rand (DiscE x)) = checkDiscExp' x
 checkRandExp (Rand (ContE x)) = checkContExp' x      
 checkRandExp _       = throwErrorT RandExpExpected          
                                                       
--- | Dicscrete Expression
+-- | Discrete Expression
 checkDiscExp :: MonadProb m => Exp -> m ()            
 checkDiscExp (VarRef x) = lookTy x RandDisc              
 checkDiscExp (Rand (DiscE x)) = checkDiscExp' x                
 checkDiscExp _ = throwErrorT DiscExpExpected                                    
                                                       
--- | Continuos Expression
+-- | Continuous Expression
 checkContExp :: MonadProb m => Exp -> m ()
 checkContExp (VarRef x) = lookTy x RandCont
 checkContExp (Rand (ContE x)) = checkContExp' x
@@ -189,11 +195,7 @@ checkContExp' (ExpoE a) = checkNumExp a
 -- | Node Expressions Checker                                  
 -- ======================================================= 
 checkNodeExp :: MonadProb m => NodeExp -> m () 
-checkNodeExp (NE xs) = do checkng xs
-                where 
-                  checkng [] = return ()
-                  checkng ((_,y):ys) = do checkNumExp y
-                                          checkng ys  
+checkNodeExp (NE xs) = mapM_ (checkNumExp . snd) xs
 
 
 -- =====================================================
@@ -213,7 +215,7 @@ checkPathExp _ = throwErrorT PathExpExpected
 -- | Path Value Checker                                       
 -- ======================================================
 checkPath ::MonadProb m => Path -> m ()
-checkPath x | V.length x == 0 = throwErrorT EmptyPath
+checkPath x | V.null x  = throwErrorT EmptyPath
             | otherwise = return ()
 
 

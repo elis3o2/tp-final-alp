@@ -1,3 +1,8 @@
+{-|
+Module      : Simulation
+Description : Simulation in markov chains
+-}
+
 module Simulation where
 
 import Common
@@ -15,6 +20,7 @@ pick p row acc j | p <= acc + row V.! j = j
                  | otherwise = pick p row (acc + row V.! j) (j + 1)
 
 
+
 createPathInit :: MonadProb m => Matrix Double -> Int -> Int -> m [Int]
 createPathInit mat start n = go start n
   where
@@ -25,12 +31,14 @@ createPathInit mat start n = go start n
       return (current : rest)
 
 
+
 doSimulFromName :: MonadProb m => Markov -> Name -> Int -> m Path
 doSimulFromName (Mk names mat) n i = do
   let start = indexOf names n
   p <- createPathInit mat start i
   return (V.fromList (map (names V.!) p))
   
+
   
 doSimulFromVec :: MonadProb m => Markov -> Vec Double -> Int -> m Path
 doSimulFromVec (Mk names mat) v i = do
