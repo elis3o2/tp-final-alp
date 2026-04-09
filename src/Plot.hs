@@ -1,6 +1,6 @@
 {-|
 Module      : Plot
-Description : Plotting for distribution function and Markov Chains
+Description : Plotting for probability distributions and Markov chains.
 -}
 
 module Plot where

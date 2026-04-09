@@ -1,6 +1,6 @@
 {-|
 Module      : CBin
-Description : Factorial and binomial coefficient
+Description : Factorial and binomial coefficient.
 -}
 module CBin (fact, (|*|)) where
 

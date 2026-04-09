@@ -1,6 +1,6 @@
 {-|
 Module      : Common
-Description : Generic definitions
+Description : Generic definitions shared across the project.
 -}
 module Common where 
 import qualified Data.Vector as V

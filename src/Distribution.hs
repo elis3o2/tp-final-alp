@@ -1,6 +1,7 @@
 {-|
 Module      : Distribution
-Description : Distribution probability functions definition
+Description : Probability mass and density functions, 
+            cumulative distributions and statistics.
 -}
 
 module Distribution where
@@ -27,7 +28,7 @@ functionDisc (Poiss l) k = exp (-l) * l ^ k /
 -- GEOMETRIC 
 functionDisc (Geo p) k = (1 - p) ^ (k - 1) * p
 
--- PASCAL (soporte: k >= r)
+-- PASCAL 
 functionDisc (Pasc r p) k = fromIntegral (toInteger (k - 1) |*| toInteger (r - 1)) *
                               p ^ r *
                               (1 - p) ^ (k - r)
@@ -245,7 +246,7 @@ getMaxPDF (Disc _) = error "Not definded"
 
 
 -- ===========================================
--- Utils
+-- | Utils
 -- ===========================================
 -- Utils for plot and print
 nameDisc :: VarDisc -> String

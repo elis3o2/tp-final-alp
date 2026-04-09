@@ -1,6 +1,6 @@
 {-|
 Module      : Error
-Description : Type errors definition
+Description : Error type definitions for parse, execution and type checking errors.
 -}
 
 module Error where
@@ -48,6 +48,7 @@ data TError =
   | InvalidVarType
   | EmptyPath
   | MkExpExpected
+  | ProbInvalidFormT
   
   deriving (Eq)
 
@@ -76,3 +77,4 @@ instance Show TError where
   show PathExpExpected = "Path expression was expected"
   show EmptyPath        = "Paths can't be empty"
   show MkExpExpected    = "Markov Expression was expected"
+  show ProbInvalidFormT = "Ranges at probability function not valid"

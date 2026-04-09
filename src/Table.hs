@@ -1,6 +1,6 @@
 {-|
 Module      : Table
-Description : Tables shows in terminal
+Description : Terminal table rendering for discrete probability distributions.
 -}
 
 module Table where
@@ -93,7 +93,6 @@ makeTableR (VRand (Disc v)) (VNum x) (VNum y) = do
   probs <- buildProbR (Disc v) x' y'
   return (renderTable (nameDisc v) probs)
 makeTableR _ _ _ = throwErrorE InvalidProb
-
 
 
 

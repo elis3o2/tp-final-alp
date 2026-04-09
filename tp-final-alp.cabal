@@ -81,7 +81,8 @@ library
                       easyplot,
                       random,
                       gnuplot,
-                      graphviz
+                      graphviz,
+                      
     -- Directories containing source files.
     hs-source-dirs:   src
 
@@ -131,6 +132,8 @@ executable tp-final-alp
         mtl,
         prettyprinter,
         prettyprinter-ansi-terminal,
+        containers,
+        haskeline
 
     -- Directories containing source files.
     hs-source-dirs:   app

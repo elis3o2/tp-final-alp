@@ -1,4 +1,10 @@
-{-# LANGUAGE RecordWildCards #-}
+{-|
+Module      : Main
+Description : Entry point. Parses CLI arguments, loads and compiles files.
+              When verbose mode is enabled, prints each command and its result.
+              When no files are provided, starts an interactive REPL.
+-}
+
 module Main where
 
 import AST
@@ -7,7 +13,6 @@ import Data.Char ( isSpace )
 import Control.Exception ( catch , IOException )
 import System.IO ( hPrint, stderr, hPutStrLn )
 import Control.Monad.Except (throwError)
-import Control.Monad.IO.Class (liftIO)
 import System.Exit ( exitWith, ExitCode(ExitFailure) )
 import Options.Applicative
 import PPrint
@@ -17,27 +22,28 @@ import Parse
 import Eval
 import Monad
 import TypeChecker
-import Monad (MonadProb, ProbM, runProbM)
 import Table
-import Prettyprinter (vsep, Doc)
-import Prettyprinter.Render.Terminal (putDoc, AnsiStyle)
+import Prettyprinter.Render.Terminal (putDoc)
 import Plot
-import Control.Monad.Reader (asks)
-
-
+import qualified Data.Map as M
+import System.Console.Haskeline
+  ( runInputT, getInputLine, 
+   defaultSettings, Settings(..)
+  , InputT )
 
 -- ============================================================
 -- | CLI
 -- ============================================================
+
 parseMode :: Parser Bool
 parseMode =
-  switch (long "verbose" <> short 'v' <> help "Modo verbose")
+  switch (long "verbose" <> short 'v' <> help "Verbose mode")
 
 parseDecimals :: Parser Int
 parseDecimals =
   option auto
     ( long "decimals" <> short 'd' <> metavar "INT"
-   <> help "Cantidad de decimales a mostrar"
+   <> help "Number of decimals to show"
    <> value 6 <> showDefault )
 
 parseArgs :: Parser (Bool, Int, [FilePath])
@@ -48,16 +54,14 @@ main = execParser opts >>= go
   where
     opts = info (parseArgs <**> helper)
       ( fullDesc
-     <> progDesc "Compilador de FD4"
-     <> header "Compilador de FD4 de la materia Compiladores 2025" )
+     <> progDesc "Prob runner"
+     <> header "Probability distributions and Markov chains" )
+
 
 go :: (Bool, Int, [FilePath]) -> IO ()
+go (opt, decs, [])    = repl (Conf opt decs)
 go (opt, decs, files) = runOrFail (Conf opt decs) $ mapM_ compileFile files
 
-
--- ============================================================
--- | Runner: captura e imprime las trazas acumuladas
--- ============================================================
 
 runOrFail :: Conf -> ProbM a -> IO a
 runOrFail c m = do
@@ -69,11 +73,8 @@ runOrFail c m = do
     Right (v, _) -> return v
 
 
-
-
-
 -- ============================================================
--- | Compilación
+-- | Compilation
 -- ============================================================
 
 loadFile :: MonadProb m => FilePath -> m [Comm]
@@ -81,14 +82,13 @@ loadFile f = do
   let filename = reverse (dropWhile isSpace (reverse f))
   x <- liftIO $ catch (readFile filename)
          (\e -> do let err = show (e :: IOException)
-                   hPutStrLn stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err)
+                   hPutStrLn stderr ("Couldn't open the file " ++ filename ++ ": " ++ err)
                    return "")
   parseIO filename program x
 
 compileFile :: MonadProb m => FilePath -> m ()
 compileFile f = do
   comms <- loadFile f
-  liftIO (print comms)
   mapM_ checkComm comms
   mapM_ handleComm comms
 
@@ -100,32 +100,163 @@ parseIO filename p x =
 
 
 -- ============================================================
--- | Handlers de comandos
+-- | REPL
 -- ============================================================
+
+banner :: String
+banner = unlines
+  [ "┌─────────────────────────────────────┐"
+  , "│  Prob - Probability Language REPL   │"
+  , "│  :help for commands, :q to exit     │"
+  , "└─────────────────────────────────────┘"
+  ]
+
+helpText :: String
+helpText = unlines
+  [ "Commands:"
+  , "  :q / :quit         Exit the REPL"
+  , "  :help              Show this message"
+  , "  :env               Show all declared variables"
+  , "  :load <file>       Load and execute a file"
+  , "  <command>          Evaluate a command"
+  ]
+
+
+repl :: Conf -> IO ()
+repl conf = do
+  putStr banner
+  runInputT settings (loop initialEnv)
+  where
+    settings = defaultSettings { historyFile = Just ".prob_history" }
+
+    loop :: Env -> InputT IO ()
+    loop env = do
+      minput <- getInputLine "prob> "
+      case minput of
+        Nothing      -> liftIO $ putStrLn "Bye!"
+        Just ":q"    -> liftIO $ putStrLn "Bye!"
+        Just ":quit" -> liftIO $ putStrLn "Bye!"
+        Just ""      -> loop env
+        Just input   -> do
+          env' <- liftIO $ handleInput conf env input
+          loop env'
+
+handleInput :: Conf -> Env -> String -> IO Env
+handleInput conf env (':':rest) = handleReplComm conf env (trim rest)
+handleInput conf env input      = handleLine     conf env input
+
+handleLine :: Conf -> Env -> String -> IO Env
+handleLine conf env input = do
+  res <- runProbM action conf env
+  case res of
+    Left err      -> hPrint stderr err >> return env  -- error → env sin cambios
+    Right (_, env') -> return env'
+  where
+    action = do
+      comm <- parseIO "<interactive>" parseComm input
+      checkComm comm
+      handleComm comm
+
+handleReplComm :: Conf -> Env -> String -> IO Env
+handleReplComm conf env "help" = putStr helpText >> return env
+handleReplComm conf env "env"  = printEnvIO env  >> return env
+handleReplComm conf env rest
+  | "load " `isPrefixOf` rest = do
+      res <- runProbM (compileFile (trim (drop 5 rest))) conf env
+      case res of
+        Left err        -> hPrint stderr err >> return env
+        Right (_, env') -> return env'
+handleReplComm _    env cmd = do
+  putStrLn ("Unknown command: :" ++ cmd)
+  return env
+
+printEnvIO :: Env -> IO ()
+printEnvIO env =
+  if M.null (decls env) && M.null (nodes env)
+    then putStrLn "<empty environment>"
+    else do
+      mapM_ (\(n,(_,t)) -> putStrLn (n ++ " : " ++ show t)) (M.toList (decls env))
+      mapM_ (\(n,_)     -> putStrLn (n ++ " : Node"))        (M.toList (nodes env))
+
+
+isPrefixOf :: String -> String -> Bool
+isPrefixOf []     _      = True
+isPrefixOf _      []     = False
+isPrefixOf (x:xs) (y:ys) = x == y && isPrefixOf xs ys
+
+
+
+printEnv :: MonadProb m => m ()
+printEnv = do
+  ds <- getDecls
+  ns <- getNodes
+  if M.null ds && M.null ns
+    then liftIO $ putStrLn "<empty environment>"
+    else do
+      mapM_ printDecl (M.toList ds)
+      mapM_ printNode (M.toList ns)
+  where
+    printDecl (n, (_, t)) = liftIO $ putStrLn (n ++ " : " ++ show t)
+    printNode (n, _)      = liftIO $ putStrLn (n ++ " : Node")
+
+
+trim :: String -> String
+trim = reverse . dropWhile isSpace . reverse . dropWhile isSpace
+
+-- ============================================================
+-- | Commands Handler
+-- ============================================================
+
 handleComm :: MonadProb m => Comm -> m ()
 
-handleComm (Let x e) = do v <- eval e
-                          updateDecl x v
+handleComm c@(Let x e) = do pc <- ppComm c
+                            v  <- eval e
+                            pv <- ppValue v
+                            updateDecl x v
+                            printVerbose pc
+                            printVerbose pv
+                            
+handleComm c@(Print e) = do pc <- ppComm c
+                            v  <- eval e
+                            pv <- ppValue v
+                            printVerbose pc
+                            liftIO $ putDoc pv
 
-handleComm (Print e) = do v <- eval e
-                          pv <- ppValue v
-                          liftIO $ putDoc pv
+handleComm c@(Table x) = do pc <- ppComm c
+                            x' <- eval x
+                            px <- ppValue x'
+                            t  <- makeTable x'
+                            printVerbose pc
+                            printVerbose px
+                            liftIO $ putStrLn t
 
-handleComm (Table x) = do x' <- eval x
-                          t  <- makeTable x'
-                          liftIO $ putStrLn t
+handleComm c@(TableR x n m) = do pc <- ppComm c
+                                 x' <- eval x
+                                 n' <- eval n
+                                 m' <- eval m
+                                 t  <- makeTableR x' n' m'
+                                 px <- ppValue x' 
+                                 pn <- ppValue n'
+                                 pm <- ppValue m'
+                                 printVerbose pc
+                                 printVerbose px
+                                 printVerbose pn
+                                 printVerbose pm                                 
+                                 liftIO $ putStrLn t
 
-handleComm (TableR x n m) = do x' <- eval x
-                               n' <- eval n
-                               m' <- eval m
-                               t  <- makeTableR x' n' m'
-                               liftIO $ putStrLn t
+handleComm c@(Plot x) = do pc <- ppComm c
+                           x' <- eval x
+                           px <- ppValue x'
+                           printVerbose pc
+                           printVerbose px
+                           case x' of
+                             VRand v -> liftIO (plotRand v)
+                             VMark v -> liftIO (plotMarkov v)
+                             _       -> return ()
 
-handleComm (Plot x) = do x' <- eval x
-                         case x' of
-                           VRand v -> liftIO (plotRand v)
-                           VMark v -> liftIO (plotMarkov v)
-                           _       -> return ()
-
-handleComm (LetN x e) = do e' <- evalNodeExp e
-                           addNode x e'
+handleComm c@(LetN x e) = do pc <- ppComm c
+                             e' <- evalNodeExp e
+                             pe <- ppNode e'
+                             addNode x e'
+                             printVerbose pc
+                             printVerbose pe

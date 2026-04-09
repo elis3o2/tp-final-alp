@@ -72,7 +72,7 @@ checkType x@(Rand  (ContE _)) = do checkRandExp x
                                    return RandCont
 checkType x@(Markov       {}) = do checkMarkovExp x
                                    return Mark
-checkType x@(ConstCh      {}) = do checkPathExp x
+checkType x@(ConstP       {}) = do checkPathExp x
                                    return Path
 checkType x@(ProbStep     {}) = do checkNumExp x
                                    return Num
@@ -93,14 +93,14 @@ checkType x@(SimulFromVec  {}) = do checkPathExp x
 -- | Probability Checker
 -- =========================================================
 checkProb :: MonadProb m => Exp -> m ()
-checkProb (ProbBetween _ Eq _ _  _) = throwErrorE ProbInvalidForm
-checkProb (ProbBetween _ NEq _ _ _) = throwErrorE ProbInvalidForm   
-checkProb (ProbBetween _ _ _ Eq  _) = throwErrorE ProbInvalidForm
-checkProb (ProbBetween _ _ _ NEq _) = throwErrorE ProbInvalidForm
-checkProb (ProbBetween _ Lt _ _  _) = throwErrorE ProbInvalidForm
-checkProb (ProbBetween _ Lte _ _ _) = throwErrorE ProbInvalidForm
-checkProb (ProbBetween _ _ _ Gt  _) = throwErrorE ProbInvalidForm
-checkProb (ProbBetween _ _ _ Gte _) = throwErrorE ProbInvalidForm
+checkProb (ProbBetween _ Eq _ _  _) = throwErrorT ProbInvalidFormT
+checkProb (ProbBetween _ NEq _ _ _) = throwErrorT ProbInvalidFormT  
+checkProb (ProbBetween _ _ _ Eq  _) = throwErrorT ProbInvalidFormT
+checkProb (ProbBetween _ _ _ NEq _) = throwErrorT ProbInvalidFormT
+checkProb (ProbBetween _ Lt _ _  _) = throwErrorT ProbInvalidFormT
+checkProb (ProbBetween _ Lte _ _ _) = throwErrorT ProbInvalidFormT
+checkProb (ProbBetween _ _ _ Gt  _) = throwErrorT ProbInvalidFormT
+checkProb (ProbBetween _ _ _ Gte _) = throwErrorT ProbInvalidFormT
 checkProb (ProbBetween  x _ n _  m) = do checkRandExp x
                                          checkNumExp n
                                          checkNumExp m
@@ -203,7 +203,7 @@ checkNodeExp (NE xs) = mapM_ (checkNumExp . snd) xs
 -- ======================================================
 checkPathExp :: MonadProb m => Exp -> m () 
 checkPathExp (VarRef  c) = lookTy c Path 
-checkPathExp (ConstCh x) = checkPath x 
+checkPathExp (ConstP  x) = checkPath x 
 checkPathExp (SimulFromName x _ n) = do checkMarkovExp x 
                                         checkNumExp n 
 checkPathExp (SimulFromVec x v n) = do checkMarkovExp x 

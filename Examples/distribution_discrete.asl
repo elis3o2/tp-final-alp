@@ -14,7 +14,7 @@ print(esperanzaX)
 print(V(X) + V(Y))
 
 // Distribución personalizada (Vectores de valores y probabilidades)
-CustomD ~ [(1, 2, 3, 4), (0.1, 0.2, 0.4, 0.3)]
+CustomD ~ [(1, 2, 3, 4) (0.1, 0.2, 0.4, 0.3)]
 print(E(CustomD))
 
 table(CustomD)

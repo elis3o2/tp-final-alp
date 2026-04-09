@@ -1,6 +1,6 @@
 {-|
 Module      : Eval
-Description : Expression evaluator
+Description : Expression and command evaluator.
 -}
 
 module Eval where
@@ -40,7 +40,7 @@ eval x@(ProbBetween   {}) = VNum   <$> evalNumExp    x
 eval x@(Mode          {}) = VVec   <$> evalVecExp    x
 eval x@(ConstV        {}) = VVec   <$> evalVecExp    x
 eval x@(Rand          {}) = VRand  <$> evalRandExp   x
-eval x@(ConstCh       {}) = VPath  <$> evalPathExp   x
+eval x@(ConstP        {}) = VPath  <$> evalPathExp   x
 eval x@(Markov        {}) = VMark  <$> evalMarkovExp x
 eval x@(ProbStep      {}) = VNum   <$> evalNumExp    x
 eval x@(ProbPath      {}) = VNum   <$> evalNumExp    x
@@ -177,8 +177,12 @@ evalVecExp _         = throwErrorE TypeCheckError
 -- ==========================================
 evalRandExp :: MonadProb m => Exp -> m RandVar
 evalRandExp (VarRef x)       = getRand x
-evalRandExp (Rand (DiscE x)) = Disc <$> evalDiscExp x
-evalRandExp (Rand (ContE x)) = Cont <$> evalContExp x
+evalRandExp (Rand (DiscE x)) = do v  <- evalDiscExp x
+                                  valVarDisc v
+                                  return (Disc v)
+evalRandExp (Rand (ContE x)) = do v <- evalContExp x
+                                  valVarCont v
+                                  return (Cont v)
 evalRandExp _ = throwErrorE TypeCheckError
 
 
@@ -223,7 +227,7 @@ evalContExp (ExpoE a) = do a' <- evalNumExp a
 -- ===========================================
 evalPathExp :: MonadProb m => Exp -> m Path
 evalPathExp (VarRef x)            = getPath x
-evalPathExp (ConstCh x)           = return x
+evalPathExp (ConstP x)            = return x
 evalPathExp (SimulFromName x m s) = do x' <- evalMarkovExp x 
                                        valMkName x' m 
                                        s' <- evalNumExp s >>= toInt

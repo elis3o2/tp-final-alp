@@ -102,7 +102,7 @@ valVarDisc (Hiper m r n) | m <= 0     = throwErrorE RandInvalidForm
                          | otherwise  = return ()
 
 valVarDisc (Custom xs ps) | V.null ps = throwErrorE RandInvalidForm
-                          | S.size (S.fromList (V.toList xs)) /= V.length xs = throwErrorE RandInvalidForm
+                          | S.size (S.fromList (V.toList xs)) /= V.length ps = throwErrorE RandInvalidForm
                           | V.any (\p -> p < 0 || p > 1) ps = throwErrorE InvalidProb
                           | abs (V.sum ps - 1) > 1e-9 = throwErrorE InvalidProb
                           | otherwise = return ()

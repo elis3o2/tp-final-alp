@@ -5,6 +5,6 @@ print(miVector[0])
 print(miVector[2] * 10)
 
 // Uso de vectores en distribuciones Custom
-Valores = (0, 1)
-Probs = (0.5, 0.5)
-Moneda ~ [Valores, Probs]
+valores = (0, 1)
+probs = (0.5, 0.5)
+Moneda ~ [valores probs]

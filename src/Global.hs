@@ -1,6 +1,6 @@
 {-|
 Module      : Global
-Description : Global state definition
+Description : Global state and configuration definitions.
 -}
 module Global where
 import AST

@@ -1,6 +1,6 @@
 {-|
 Module      : Monad
-Description : MonadProb definition
+Description : MonadProb definition and state access operations.
 -}
 
 {-# LANGUAGE FlexibleInstances #-}
@@ -18,23 +18,23 @@ import Control.Monad.State
 import Control.Monad.Except
 import qualified Data.Map as M
 import System.Random (randomRIO)
-import qualified Data.Vector as V
+import Prettyprinter.Render.Terminal 
+import Prettyprinter 
 
+import qualified Data.Vector as V
 
 
 class ( MonadIO m
       , MonadState Env m
       , MonadError Error m
       , MonadReader Conf m
-      ) => MonadProb m where
-  getRandom :: m Double
+      ) => MonadProb m 
       
+
 
 type ProbM = ReaderT Conf (StateT Env (ExceptT Error IO))
 
-instance MonadProb ProbM where
-  getRandom = liftIO (randomRIO (0.0, 1.0))
-
+instance MonadProb ProbM  
 
 throwErrorE :: MonadProb m => EError -> m a
 throwErrorE e = throwError (ExecErr e)
@@ -146,9 +146,15 @@ lookNodes c = V.mapM_ getNode c
 
 
 
+getRandom :: MonadProb m => m Double
+getRandom = liftIO (randomRIO (0.0, 1.0))
 
-printP :: (MonadProb m, Show a) => a -> m ()
-printP x = liftIO (print x)
+
+
+printVerbose :: MonadProb m => Doc AnsiStyle -> m ()
+printVerbose doc = do v <- asks verbose
+                      if v then liftIO (putDoc (doc <> hardline))
+                           else return ()
 
 
 runProbM :: ProbM a -> Conf -> Env -> IO (Either Error (a, Env))

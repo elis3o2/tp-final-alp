@@ -1,6 +1,6 @@
 {-|
 Module      : Markov
-Description : Markov Chains Functions
+Description : Markov chain operations: transition matrix, path probability and stationary distribution.
 -}
 
 module Markov

@@ -1,6 +1,6 @@
 {-|
 Module      : PPrint
-Description : Pretty Printer for expressions
+Description : Pretty printer for expressions, values and commands.
 -}
 
 module PPrint where
@@ -41,7 +41,7 @@ functionColor :: Doc AnsiStyle -> Doc AnsiStyle
 functionColor = annotate (color Blue <> bold)
 
 nameColor :: Doc AnsiStyle -> Doc AnsiStyle
-nameColor = annotate (color Cyan)
+nameColor = annotate (color Green)
 
 
 trimZeros :: String -> String
@@ -141,7 +141,7 @@ varDisc2Doc (Hiper m r n) = do return $
 varDisc2Doc (Custom v1 v2) = do pv2 <- vec2Doc v2
                                 return $
                                   group (brackets (
-                                    nest 2 (vecInt2Doc v1 <> pretty "," <> line <> pv2)))
+                                    nest 2 (vecInt2Doc v1 <> line <> pv2)))
 
 -- | Continous Distributions
 varCont2Doc :: MonadProb m => VarCont -> m (Doc AnsiStyle)
@@ -214,8 +214,7 @@ expDisc2Doc (HiperE m r n) = do pm <- prettyExp m
 expDisc2Doc (CustomE xs ps) = do pxs <- prettyExp xs
                                  pps <- prettyExp ps
                                  return $
-                                   group (brackets (pxs <> pretty "," <> line 
-                                     <> pps))
+                                   group (brackets (pxs <> line <> pps))
 
 
 -- Continous Expressions
@@ -364,7 +363,7 @@ prettyExp (Mode x) = do
 
 prettyExp (Rand x) = expRand2Doc x
 
-prettyExp (ConstCh x) = return $ path2Doc x
+prettyExp (ConstP x) = return $ path2Doc x
 
 prettyExp (Markov (MarkovE x)) =
   return $ functionColor (pretty "mk") <+> path2Doc x
@@ -464,11 +463,17 @@ maybeParenN e                   = prettyExp e
 
 
 ppNodesExp :: MonadProb m => NodeExp -> m (Doc AnsiStyle)
-ppNodesExp (NE nodes) = do
+ppNodesExp (NE node) = do
   ps <- mapM (\(n, v) -> do pv <- prettyExp v
-                            return $ parens (nameColor (pretty n) <> pretty "," <> pv)) nodes
+                            return $ parens (nameColor (pretty n) <> pretty "," <> pv)) node
   return $ brackets . hsep . punctuate comma $ ps
 
+
+ppNode :: MonadProb m => NodeVal -> m (Doc AnsiStyle)
+ppNode (N node) = do
+  ds <- mapM (\(n, p) -> do pp <- double2Doc p
+                            return (nameColor (pretty n) <+> pretty ":" <+> pp)) node
+  return $ brackets (hsep (punctuate (pretty ",") ds)) <> pretty "\n"
 
 
 ppComm :: MonadProb m => Comm -> m (Doc AnsiStyle)
@@ -478,7 +483,7 @@ ppComm (Let x e) = do ty <- getTy x
                                  RandCont -> pretty "~"
                                  RandDisc -> pretty "~"
                                  _        -> pretty "="
-                      return $ group (nameColor (pretty x) <+> op <+> nest 2 pe)
+                      return $ group (varColor (pretty x) <+> op <+> nest 2 pe)
 
 ppComm (Print x) = do px <- prettyExp x
                       return $ group (functionColor (pretty "print") <> parens px)
@@ -515,7 +520,6 @@ ppValue (VVec x)  = do pd <- vec2Doc x
 ppValue (VMark x) = do pd <- markov2Doc x
                        return $ pd <> pretty "\n"
 ppValue (VPath x) = return $ path2Doc x <> pretty "\n"
-ppValue (VNode (N pairs)) = do 
-  let ds = map (\(n, p) -> nameColor (pretty n) <+> pretty ":" <+> pretty (show p)) pairs
-  return $ brackets (hsep (punctuate comma ds)) <> pretty "\n"
+ppValue (VNode x) = do pd <- ppNode x  
+                       return $ pd <> pretty "\n"
 ppValue Dummy = return $ pretty "DUMMY" <> pretty "\n"

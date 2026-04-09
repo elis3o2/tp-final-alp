@@ -1,6 +1,6 @@
 {-|
 Module      : AST
-Description : Language Definition
+Description : Language definition: expressions, commands, types and values.
 -}
 module AST where
 import Common
@@ -61,7 +61,7 @@ data Exp
   | Rand RandExp      --  RandExp  
 
   -- Cadenas de Markov
-  | ConstCh Path                -- Path
+  | ConstP Path                 -- Path
   | Markov MarkovExp            -- Markov
 
   | ProbStep Exp Name Name Exp  -- MarkovExp -> Name -> Name -> NumExp -> Double
@@ -83,7 +83,7 @@ data Value =
   | VRand  RandVar
   | VMark  Markov
   | VNode  NodeVal
-  | VPath Path
+  | VPath  Path
   | Dummy
 
  deriving (Show, Eq)

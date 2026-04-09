@@ -1,3 +1,8 @@
+{-
+Module      : Parse
+Description : Parser for the probabilistic language.
+-}
+
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use <$>" #-}
 module Parse where
@@ -244,7 +249,6 @@ parseHiper = do try (reserved "HG")
 parseCustom :: P RandExp                          
 parseCustom = brackets $ do                       
                   v1 <- parseVecExp               
-                  reservedOp ","                  
                   v2 <- parseVecExp               
                   return (DiscE (CustomE v1 v2))  
                                                   
@@ -555,7 +559,7 @@ parseRandExp = try
 -------------------------------------------------
 -- | Path                                          
 parsePathExp :: P Exp                            
-parsePathExp = try (ConstCh <$> parsePath)       
+parsePathExp = try (ConstP <$> parsePath)       
             <|> try parseVarL                    
             <|> try parseSimulateName            
             <|> parseSimulateVec                 
