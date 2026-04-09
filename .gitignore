@@ -3,4 +3,4 @@ dist-newstyle
 plot1.dat
 plot2.dat
 *.png
-._prob_history
+.prob_history
