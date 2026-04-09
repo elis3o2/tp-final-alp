@@ -221,10 +221,10 @@ simulate(M, n, prob = v)      -- simulate n steps with initial distribution v
 
 ## Examples
 
-The `examples/` folder contains sample scripts covering all major features.
+The `Examples/` folder contains sample scripts covering all major features.
 
 ```bash
-cabal run tp-final-alp -- examples/probabilities.prob
-cabal run tp-final-alp -- examples/mk1.prob
-cabal run tp-final-alp -- --verbose examples/plots.prob
+cabal run tp-final-alp -- Examples/probabilities.prob
+cabal run tp-final-alp -- Examples/mk1.prob
+cabal run tp-final-alp -- --verbose Examples/plots.prob
 ```
